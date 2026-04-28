@@ -76,6 +76,11 @@ EOF
   run_out "$d/dnsperf-pod-wait.txt" oc -n "$VALIDATION_NAMESPACE" wait pod/dnsperf --for=condition=Ready --timeout=180s
 
   echo -e "qps\trc\tlog" >"$d/dnsperf-summary.tsv"
+  local extra_args=()
+  if [[ -n "${DNSPERF_EXTRA_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    extra_args=($DNSPERF_EXTRA_ARGS)
+  fi
   for qps in $DNSPERF_QPS_STEPS; do
     local out="$d/dnsperf-qps-${qps}.log"
     set +e
@@ -87,7 +92,7 @@ EOF
       -T "$DNSPERF_THREADS" \
       -Q "$qps" \
       -S "$DNSPERF_STATS_INTERVAL" \
-      -W $DNSPERF_EXTRA_ARGS >"$out" 2>&1
+      "${extra_args[@]}" >"$out" 2>&1
     rc=$?
     set -e
     echo -e "${qps}\t${rc}\t${out}" >>"$d/dnsperf-summary.tsv"
