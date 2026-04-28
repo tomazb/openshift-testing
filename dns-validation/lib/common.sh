@@ -30,6 +30,7 @@ confirm() {
 run() {
   log "+ $*"
   "$@" 2>&1 | tee -a "$LOG_FILE"
+  return "${PIPESTATUS[0]}"
 }
 
 run_out() {
