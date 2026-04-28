@@ -101,13 +101,16 @@ discover_dns_tests() {
   : >"$raw"
 
   set +e
-  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/parallel --dry-run 2>/dev/null | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
-  "$OPENSHIFT_TESTS_BIN" run kubernetes/conformance --dry-run 2>/dev/null | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
-  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/serial --dry-run 2>/dev/null | grep -Ei "$DNS_TEST_REGEX" >"$d/dns-serial-candidates.txt"
+  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/parallel --dry-run 2>"$d/dry-run-parallel.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
+  "$OPENSHIFT_TESTS_BIN" run kubernetes/conformance --dry-run 2>"$d/dry-run-k8s.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
+  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/serial --dry-run 2>"$d/dry-run-serial.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >"$d/dns-serial-candidates.txt"
   set -e
 
   [[ "$INCLUDE_SERIAL_DNS_TESTS" == true ]] && cat "$d/dns-serial-candidates.txt" >>"$raw" || true
   sort -u "$raw" >"$d/dns-tests.txt"
+  if [[ ! -s "$d/dns-tests.txt" ]]; then
+    fail "DNS test discovery produced no matches. Check $d/dry-run-*.stderr.log and DNS_TEST_REGEX='$DNS_TEST_REGEX'."
+  fi
   log "Discovered $(wc -l <"$d/dns-tests.txt" | awk '{print $1}') DNS tests. Review: $d/dns-tests.txt"
 }
 
@@ -140,7 +143,9 @@ run_single_test() {
   read -r -p "Full openshift-tests test name: " test_name
   [[ -n "$test_name" ]] || fail "No test name provided."
 
-  local f="$ARTIFACT_DIR/01-openshift-tests/single-test-$(date +%Y%m%d-%H%M%S).log"
+  local timestamp
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  local f="$ARTIFACT_DIR/01-openshift-tests/single-test-${timestamp}.log"
   local rc=0
   set +e
   "$OPENSHIFT_TESTS_BIN" run-test "$test_name" >"$f" 2>&1
@@ -148,7 +153,11 @@ run_single_test() {
   set -e
 
   echo "$rc" >"$f.rc"
-  [[ $rc -eq 0 ]] && log "Single test passed." || warn "Single test rc=$rc; see $f"
+  if [[ $rc -eq 0 ]]; then
+    log "Single test passed."
+  else
+    warn "Single test rc=$rc; see $f"
+  fi
 }
 
 node_sweep() {
