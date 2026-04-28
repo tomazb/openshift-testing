@@ -15,7 +15,7 @@ cd dns-validation
 cp config/validation.env.example config/validation.env
 vi config/validation.env
 
-./bin/ocp-dns-validate --config config/validation.env menu
+bash bin/ocp-dns-validate --config config/validation.env menu
 ```
 
 The text frontend exposes the validation steps in a controlled order:
@@ -40,21 +40,28 @@ The text frontend exposes the validation steps in a controlled order:
 
 ```bash
 cd dns-validation
-./bin/ocp-dns-validate --config config/validation.env all
+bash bin/ocp-dns-validate --config config/validation.env all
 ```
 
 Individual steps are also available:
 
 ```bash
-./bin/ocp-dns-validate preflight
-./bin/ocp-dns-validate extract-tests
-./bin/ocp-dns-validate discover-dns-tests
-./bin/ocp-dns-validate run-dns-tests
-./bin/ocp-dns-validate node-sweep
-./bin/ocp-dns-validate generate-queries
-./bin/ocp-dns-validate dnsperf
-./bin/ocp-dns-validate perf-tests
-./bin/ocp-dns-validate report
+bash bin/ocp-dns-validate preflight
+bash bin/ocp-dns-validate extract-tests
+bash bin/ocp-dns-validate discover-dns-tests
+bash bin/ocp-dns-validate run-dns-tests
+bash bin/ocp-dns-validate node-sweep
+bash bin/ocp-dns-validate generate-queries
+bash bin/ocp-dns-validate dnsperf
+bash bin/ocp-dns-validate perf-tests
+bash bin/ocp-dns-validate report
+```
+
+If you clone the repo locally and want direct execution, run:
+
+```bash
+chmod +x bin/ocp-dns-validate
+./bin/ocp-dns-validate --config config/validation.env menu
 ```
 
 ## Required access
@@ -108,7 +115,7 @@ runs/<timestamp>/05-report/dns-validation-report.md
 ## Cleanup
 
 ```bash
-./bin/ocp-dns-validate cleanup
+bash bin/ocp-dns-validate cleanup
 ```
 
 This deletes only the configured validation namespace. It does not delete `openshift-tests` e2e namespaces that may have been intentionally preserved for debugging.
