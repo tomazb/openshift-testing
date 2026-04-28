@@ -132,15 +132,16 @@ max_qps: ${maxqps}
 query_file: ["ocp-custom.txt"]
 EOF
 
-  (cd "$repo/dns" && python3 -m venv .venv && . .venv/bin/activate && pip install --upgrade pip >/dev/null && pip install numpy pyyaml >/dev/null)
+  (cd "$repo/dns" && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install numpy pyyaml) >"$d/perf-tests-setup.log" 2>&1
   mkdir -p "$repo/dns/.ocp-bin"
   ln -sf "$(command -v oc)" "$repo/dns/.ocp-bin/kubectl"
 
-  local cmd=(python py/run_perf.py --params params/coredns/ocp-quick.yaml --out-dir out/ocp-quick)
+  local py="$repo/dns/.venv/bin/python"
+  local cmd=("$py" py/run_perf.py --params params/coredns/ocp-quick.yaml --out-dir out/ocp-quick)
   case "$PERF_TESTS_MODE" in
     cluster-dns) cmd+=(--use-cluster-dns) ;;
     dns-ip) cmd+=(--dns-ip "$CLUSTER_DNS_IP") ;;
-    isolated-coredns) cmd=(python py/run_perf.py --dns-server coredns --params params/coredns/ocp-quick.yaml --out-dir out/ocp-quick) ;;
+    isolated-coredns) cmd=("$py" py/run_perf.py --dns-server coredns --params params/coredns/ocp-quick.yaml --out-dir out/ocp-quick) ;;
     *) fail "Unsupported PERF_TESTS_MODE=$PERF_TESTS_MODE" ;;
   esac
 
