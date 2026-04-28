@@ -204,6 +204,8 @@ EOF
 
 cleanup() {
   init_dirs
+  read_runtime
+  require_cmd oc
   if confirm "Delete namespace '$VALIDATION_NAMESPACE'?"; then
     run oc delete namespace "$VALIDATION_NAMESPACE" --ignore-not-found=true
   else
