@@ -163,11 +163,14 @@ run_single_test() {
 node_sweep() {
   init_dirs
   require_cmd oc
+  read_runtime
+  [[ -n "${CLUSTER_DOMAIN:-}" ]] || { preflight; read_runtime; }
   ensure_namespace
 
   local d="$ARTIFACT_DIR/02-node-sweep"
   local manifest="$d/dns-sweep-daemonset.yaml"
   local result="$d/node-dns-sweep.txt"
+  local domain="${CLUSTER_DOMAIN:-cluster.local}"
 
   cat >"$manifest" <<EOF
 apiVersion: apps/v1
@@ -199,7 +202,7 @@ EOF
   for pod in $(oc -n "$VALIDATION_NAMESPACE" get pod -l app=dns-sweep -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true); do
     node="$(oc -n "$VALIDATION_NAMESPACE" get pod "$pod" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)"
     echo "### pod=$pod node=$node" >>"$result"
-    oc -n "$VALIDATION_NAMESPACE" exec "$pod" -- sh -c 'nslookup kubernetes.default.svc.cluster.local; nslookup openshift.default.svc.cluster.local || true; nslookup registry.redhat.io || true' >>"$result" 2>&1 || true
+    oc -n "$VALIDATION_NAMESPACE" exec "$pod" -- sh -c "nslookup kubernetes.default.svc.${domain}; nslookup openshift.default.svc.${domain} || true; nslookup registry.redhat.io || true" >>"$result" 2>&1 || true
     echo >>"$result"
   done
 
