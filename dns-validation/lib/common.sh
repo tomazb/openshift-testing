@@ -57,6 +57,7 @@ init_dirs() {
 }
 
 read_runtime() {
+  # shellcheck disable=SC1090
   [[ -f "$RUNTIME_ENV" ]] && source "$RUNTIME_ENV"
 }
 

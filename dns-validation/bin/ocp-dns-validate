@@ -3,11 +3,12 @@
 set -Eeuo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
+export SCRIPT_NAME
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="$PROJECT_DIR/config/validation.env"
 ACTION="menu"
-AUTO_YES="false"
+export AUTO_YES="false"
 
 usage() {
   cat <<USAGE
@@ -71,17 +72,20 @@ PERF_TESTS_REF="${PERF_TESTS_REF:-master}"
 PERF_TESTS_MODE="${PERF_TESTS_MODE:-cluster-dns}"
 PERF_TESTS_RUN_LENGTH_SECONDS="${PERF_TESTS_RUN_LENGTH_SECONDS:-60}"
 PERF_TESTS_MAX_QPS="${PERF_TESTS_MAX_QPS:-500 1000 2000}"
-LOG_FILE="$ARTIFACT_DIR/ocp-dns-validate.log"
-RUNTIME_ENV="$ARTIFACT_DIR/runtime.env"
-OPENSHIFT_TESTS_BIN="$ARTIFACT_DIR/01-openshift-tests/openshift-tests"
+export LOG_FILE="$ARTIFACT_DIR/ocp-dns-validate.log"
+export RUNTIME_ENV="$ARTIFACT_DIR/runtime.env"
+export OPENSHIFT_TESTS_BIN="$ARTIFACT_DIR/01-openshift-tests/openshift-tests"
 
 mkdir -p "$ARTIFACT_DIR"
 
 # shellcheck source=../lib/common.sh
+# shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/common.sh"
 # shellcheck source=../lib/cluster.sh
+# shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/cluster.sh"
 # shellcheck source=../lib/perf.sh
+# shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/perf.sh"
 
 menu() {
