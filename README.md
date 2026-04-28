@@ -1,3 +1,17 @@
 # OpenShift Testing
 
-Initial repository seed. Automation changes are proposed on a feature branch.
+Automation and runbooks for validating OpenShift clusters after build or during day-2 testing.
+
+## Available validation packs
+
+### DNS validation
+
+The `dns-validation/` directory contains a text-fronted automation wrapper for DNS-focused post-install validation:
+
+- release-matched `openshift-tests` DNS conformance subset
+- node-level DNS sweep using a DaemonSet
+- direct dnsperf QPS ladder against OpenShift cluster DNS
+- optional kubernetes/perf-tests/dns quick profile
+- markdown report generation
+
+See `dns-validation/README.md` for usage instructions.
