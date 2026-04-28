@@ -198,7 +198,11 @@ EOF
 
 cleanup() {
   init_dirs
-  confirm "Delete namespace '$VALIDATION_NAMESPACE'?" && run oc delete namespace "$VALIDATION_NAMESPACE" --ignore-not-found=true || log "Cleanup skipped."
+  if confirm "Delete namespace '$VALIDATION_NAMESPACE'?"; then
+    run oc delete namespace "$VALIDATION_NAMESPACE" --ignore-not-found=true
+  else
+    log "Cleanup skipped."
+  fi
 }
 
 all_actions() {

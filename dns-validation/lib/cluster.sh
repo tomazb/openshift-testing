@@ -126,7 +126,11 @@ run_dns_tests() {
 
   echo "$rc" >"$d/dns-test-output.rc"
   grep -E '^(passed|failed|skipped):' "$d/dns-test-output.log" >"$d/dns-summary.txt" || true
-  [[ $rc -eq 0 ]] && log "DNS conformance passed." || warn "DNS conformance rc=$rc; see $d/dns-test-output.log"
+  if [[ $rc -eq 0 ]]; then
+    log "DNS conformance passed."
+  else
+    warn "DNS conformance rc=$rc; see $d/dns-test-output.log"
+  fi
 }
 
 run_single_test() {
