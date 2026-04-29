@@ -358,25 +358,32 @@ results_dnsperf_summary() {
     return
   fi
 
-  awk -F '\t' '
-    NR > 1 {
-      total++
-      if ($2 == "0") {
-        passed++
-      } else {
-        failed_qps = failed_qps ? failed_qps ", " $1 : $1
-      }
-    }
-    END {
-      if (total == 0) {
-        print "not run"
-      } else if (failed_qps == "") {
-        printf "%d/%d qps steps passed", passed, total
-      } else {
-        printf "%d/%d qps steps passed (failures: %s)", passed, total, failed_qps
-      }
-    }
-  ' "$file"
+  local qps rc log_path total=0 passed=0 failures="" step_failures threshold_failures
+  while IFS=$'\t' read -r qps rc log_path; do
+    [[ -n "$qps" ]] || continue
+    ((total += 1))
+    step_failures=""
+    if [[ "$rc" != "0" ]]; then
+      step_failures="$qps"
+    fi
+    threshold_failures="$(results_dnsperf_step_threshold_failures "$qps" "$log_path")"
+    if [[ -n "$threshold_failures" ]]; then
+      step_failures="${step_failures}${step_failures:+, }${threshold_failures}"
+    fi
+    if [[ -n "$step_failures" ]]; then
+      failures="${failures}${failures:+, }${step_failures}"
+    else
+      ((passed += 1))
+    fi
+  done < <(awk -F '\t' 'NR > 1 { print $1 "\t" $2 "\t" $3 }' "$file")
+
+  if [[ "$total" == "0" ]]; then
+    echo "not run"
+  elif [[ -n "$failures" ]]; then
+    printf '%d/%d qps steps passed (failures: %s)\n' "$passed" "$total" "$failures"
+  else
+    printf '%d/%d qps steps passed\n' "$passed" "$total"
+  fi
 }
 
 results_dnsperf_failure_qps() {
@@ -461,35 +468,50 @@ results_dnsperf_log_stats() {
   ' "$dnsperf_log_file"
 }
 
-results_dnsperf_log_threshold_failures() {
-  local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+results_dnsperf_step_threshold_failures() {
+  local qps="$1"
+  local log_path="$2"
   local loss_threshold="${DNSPERF_MAX_LOST_PERCENT:-}"
   local latency_threshold="${DNSPERF_MAX_AVG_LATENCY_SECONDS:-}"
   local failures=""
-  local qps log_path resolved stats
+  local resolved stats
   local _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes
 
-  [[ -s "$file" ]] || return 0
   [[ -n "$loss_threshold" || -n "$latency_threshold" ]] || return 0
 
+  resolved="$(results_resolve_artifact_path "$log_path" "$ARTIFACT_DIR/03-dnsperf")"
+  if [[ ! -s "$resolved" ]]; then
+    printf '%s\n' "${qps}qps log unavailable: ${log_path:-$resolved}"
+    return
+  fi
+  stats="$(results_dnsperf_log_stats "$resolved")"
+  IFS=$'\t' read -r _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes <<<"$stats"
+  lost_pct="${lost_pct%%%}"
+  if [[ -n "$loss_threshold" && "$lost_pct" != "unknown" ]]; then
+    if awk -v actual="$lost_pct" -v limit="$loss_threshold" 'BEGIN { exit !(actual > limit) }'; then
+      failures="${failures}${failures:+, }${qps}qps lost=${lost_pct}%"
+    fi
+  fi
+  if [[ -n "$latency_threshold" && "$avg" != "unknown" ]]; then
+    if awk -v actual="$avg" -v limit="$latency_threshold" 'BEGIN { exit !(actual > limit) }'; then
+      failures="${failures}${failures:+, }${qps}qps avg-latency=${avg}s"
+    fi
+  fi
+
+  printf '%s\n' "$failures"
+}
+
+results_dnsperf_log_threshold_failures() {
+  local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+  local failures=""
+  local qps log_path step_failures
+
+  [[ -s "$file" ]] || return 0
+
   while IFS=$'\t' read -r qps log_path; do
-    resolved="$(results_resolve_artifact_path "$log_path" "$ARTIFACT_DIR/03-dnsperf")"
-    if [[ ! -s "$resolved" ]]; then
-      failures="${failures}${failures:+, }${qps}qps log unavailable: ${log_path:-$resolved}"
-      continue
-    fi
-    stats="$(results_dnsperf_log_stats "$resolved")"
-    IFS=$'\t' read -r _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes <<<"$stats"
-    lost_pct="${lost_pct%%%}"
-    if [[ -n "$loss_threshold" && "$lost_pct" != "unknown" ]]; then
-      if awk -v actual="$lost_pct" -v limit="$loss_threshold" 'BEGIN { exit !(actual > limit) }'; then
-        failures="${failures}${failures:+, }${qps}qps lost=${lost_pct}%"
-      fi
-    fi
-    if [[ -n "$latency_threshold" && "$avg" != "unknown" ]]; then
-      if awk -v actual="$avg" -v limit="$latency_threshold" 'BEGIN { exit !(actual > limit) }'; then
-        failures="${failures}${failures:+, }${qps}qps avg-latency=${avg}s"
-      fi
+    step_failures="$(results_dnsperf_step_threshold_failures "$qps" "$log_path")"
+    if [[ -n "$step_failures" ]]; then
+      failures="${failures}${failures:+, }${step_failures}"
     fi
   done < <(awk -F '\t' 'NR > 1 { print $1 "\t" $3 }' "$file")
 

@@ -218,12 +218,6 @@ $(if [[ -s "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt" ]]; then ca
 $(cat "$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv" 2>/dev/null || echo "Not run")
 \`\`\`
 
-## Decision
-
-- [ ] Accepted
-- [ ] Accepted with risks
-- [ ] Blocked
-
 $summary
 EOF
 

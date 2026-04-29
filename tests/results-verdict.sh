@@ -285,6 +285,9 @@ EOF
 DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null
 grep -Fxq "Blocked" "$case_dir/05-report/verdict.txt"
 grep -Fq "dnsperf threshold failures: 100qps lost=0.17%" "$case_dir/05-report/verdict-blocking-reasons.txt"
+summary="$(DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_dnsperf_summary)"
+grep -Fq "0/1 qps steps passed" <<<"$summary"
+grep -Fq "100qps lost=0.17%" <<<"$summary"
 
 case_dir="$TMP_DIR/dnsperf-threshold-missing-log"
 write_common_success_artifacts "$case_dir"

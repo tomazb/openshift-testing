@@ -219,6 +219,10 @@ grep -Fq -- "- openshift.default.svc observed: 2/2" "$REPORT"
 grep -Fq -- "- registry.redhat.io observed: 1/2" "$REPORT"
 grep -Fq "## DNS validation verdict" "$REPORT"
 grep -Fq -- "- Verdict: Blocked" "$REPORT"
+if grep -Fq "## Decision" "$REPORT"; then
+  echo "report should not render the legacy static Decision checklist" >&2
+  exit 1
+fi
 grep -Fq -- "- Blocking reasons:" "$REPORT"
 grep -Fq -- "- Risk reasons:" "$REPORT"
 grep -Fq "Selected DNS conformance tests failed: failed=1" "$REPORT"
