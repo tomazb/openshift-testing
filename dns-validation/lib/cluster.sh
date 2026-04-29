@@ -172,6 +172,8 @@ node_sweep() {
   local d="$ARTIFACT_DIR/02-node-sweep"
   local manifest="$d/dns-sweep-daemonset.yaml"
   local result="$d/node-dns-sweep.txt"
+  # domain is sourced from oc get dns.operator/default (.status.clusterDomain)
+  # and constrained to [a-z0-9.\-] by RFC 1123 — safe to interpolate into sh -c string.
   local domain="${CLUSTER_DOMAIN:-cluster.local}"
 
   cat >"$manifest" <<EOF
