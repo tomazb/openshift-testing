@@ -31,6 +31,8 @@ EOF
 
 cat >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt" <<'EOF'
 SystemResolvConf  53
+Network 192.0.2.53 53
+Network 2001:db8::53 5353
 EOF
 
 cat >"$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" <<'EOF'
@@ -157,7 +159,7 @@ REPORT="$ARTIFACT_DIR/05-report/dns-validation-report.md"
 
 grep -Fq "## Results summary" "$REPORT"
 grep -Fq -- "- DNS operator gate: Available=True, Progressing=False, Degraded=False" "$REPORT"
-grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53" "$REPORT"
+grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53; Network 192.0.2.53 53; Network 2001:db8::53 5353" "$REPORT"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$REPORT"
 grep -Fq -- "- DNS tests: selected=3, excluded=2" "$REPORT"
 grep -Fq -- "- dnsperf: 2/3 qps steps passed (failures: 500)" "$REPORT"
@@ -182,9 +184,27 @@ grep -Fq "External DNS lookup missing on 1 of 2 swept nodes" "$REPORT"
 grep -Fq "Optional perf-tests returned rc=7" "$REPORT"
 
 grep -Fq "## Results summary" "$TMP_DIR/report.out"
-grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53" "$TMP_DIR/report.out"
+grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53; Network 192.0.2.53 53; Network 2001:db8::53 5353" "$TMP_DIR/report.out"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$TMP_DIR/report.out"
 grep -Fq "## dnsperf detailed stats" "$TMP_DIR/report.out"
+
+cat >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt" <<'EOF'
+error: failed to fetch dns upstream resolvers
+EOF
+echo "1" >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt.rc"
+
+bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report-upstream-rc.out"
+
+grep -Fq -- "- DNS upstream resolvers: not captured (rc=1)" "$REPORT"
+grep -Fq -- "- DNS upstream resolvers: not captured (rc=1)" "$TMP_DIR/report-upstream-rc.out"
+if grep -Fq -- "- DNS upstream resolvers: error: failed to fetch dns upstream resolvers" "$REPORT"; then
+  echo "report should not render failed upstream capture stderr as resolver data" >&2
+  exit 1
+fi
+if grep -Fq -- "- DNS upstream resolvers: error: failed to fetch dns upstream resolvers" "$TMP_DIR/report-upstream-rc.out"; then
+  echo "terminal output should not render failed upstream capture stderr as resolver data" >&2
+  exit 1
+fi
 
 if [[ "$(tail -n 1 "$REPORT")" != *"Optional perf-tests returned rc=7"* ]]; then
   echo "report should end with the results summary" >&2

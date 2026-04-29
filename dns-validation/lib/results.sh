@@ -313,8 +313,19 @@ results_dns_operator_gate_summary() {
 
 results_dns_upstream_summary() {
   local file="$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt"
+  local rc_file="$file.rc"
+  local rc
+
+  if [[ -f "$rc_file" ]]; then
+    rc="$(results_read_artifact_rc "$rc_file")"
+    if [[ "$rc" != "0" && "$rc" != "not run" ]]; then
+      echo "not captured (rc=$rc)"
+      return
+    fi
+  fi
+
   if [[ -s "$file" ]]; then
-    paste -sd '; ' "$file"
+    awk 'NR == 1 { printf "%s", $0; next } { printf "; %s", $0 } END { if (NR > 0) printf "\n" }' "$file"
   else
     echo "not captured"
   fi
