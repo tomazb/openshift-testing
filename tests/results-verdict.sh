@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+source "$REPO_ROOT/dns-validation/lib/results.sh"
+
+write_common_success_artifacts() {
+  local dir="$1"
+  mkdir -p \
+    "$dir/00-preflight" \
+    "$dir/01-openshift-tests" \
+    "$dir/02-node-sweep" \
+    "$dir/03-dnsperf" \
+    "$dir/04-perf-tests" \
+    "$dir/05-report"
+
+  cat >"$dir/00-preflight/dns-operator-gate.txt" <<'EOF'
+Available=True
+Progressing=False
+Degraded=False
+Expected: Available=True, Progressing=False, Degraded=False
+EOF
+  cat >"$dir/00-preflight/nodes-wide.txt" <<'EOF'
+NAME     STATUS   ROLES    AGE   VERSION   INTERNAL-IP
+node-a   Ready    worker   1d    v1.31.0   192.0.2.11
+EOF
+
+  cat >"$dir/01-openshift-tests/dns-summary.txt" <<'EOF'
+passed: (2.1s) "dns service lookup"
+EOF
+  echo "0" >"$dir/01-openshift-tests/dns-test-output.rc"
+  echo '"[sig-network] DNS should provide DNS for services [Suite:k8s]"' >"$dir/01-openshift-tests/dns-tests.txt"
+  : >"$dir/01-openshift-tests/dns-tests.excluded.txt"
+
+  cat >"$dir/02-node-sweep/node-dns-sweep.txt" <<'EOF'
+### pod=dns-sweep-a node=node-a
+Server: 172.30.0.10
+Name: kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+Name: openshift.default.svc.cluster.local
+Address: 172.30.0.1
+Name: registry.redhat.io
+Address: 192.0.2.10
+EOF
+
+  cat >"$dir/03-dnsperf/dnsperf-qps-100.log" <<'EOF'
+Statistics:
+  Queries sent:         6000
+  Queries completed:    6000 (100.00%)
+  Queries lost:         0 (0.00%)
+  Response codes:       NOERROR 6000 (100.00%)
+  Queries per second:   100.000000
+  Average Latency (s):  0.000200 (min 0.000100, max 0.010000)
+  Latency StdDev (s):   0.000300
+EOF
+
+  {
+    printf 'qps\trc\tlog\n'
+    printf '100\t0\t%s\n' "$dir/03-dnsperf/dnsperf-qps-100.log"
+  } >"$dir/03-dnsperf/dnsperf-summary.tsv"
+
+  echo "0" >"$dir/04-perf-tests/perf-tests-run.rc"
+}
+
+assert_verdict() {
+  local dir="$1"
+  local expected="$2"
+  ARTIFACT_DIR="$dir" results_compute_verdict >/dev/null
+  actual="$(cat "$dir/05-report/verdict.txt")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "expected verdict '$expected', got '$actual'" >&2
+    echo "blocking reasons:" >&2
+    cat "$dir/05-report/verdict-blocking-reasons.txt" >&2 || true
+    echo "risk reasons:" >&2
+    cat "$dir/05-report/verdict-risk-reasons.txt" >&2 || true
+    exit 1
+  fi
+}
+
+case_dir="$TMP_DIR/accepted"
+write_common_success_artifacts "$case_dir"
+assert_verdict "$case_dir" "Accepted"
+
+case_dir="$TMP_DIR/dns-operator-blocked"
+write_common_success_artifacts "$case_dir"
+sed -i 's/Available=True/Available=False/' "$case_dir/00-preflight/dns-operator-gate.txt"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "DNS operator gate unhealthy" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/dns-test-failed"
+write_common_success_artifacts "$case_dir"
+cat >"$case_dir/01-openshift-tests/dns-summary.txt" <<'EOF'
+failed: (800ms) "dns failing lookup"
+EOF
+echo "1" >"$case_dir/01-openshift-tests/dns-test-output.rc"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Selected DNS conformance tests failed" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/monitor-risk"
+write_common_success_artifacts "$case_dir"
+echo "1" >"$case_dir/01-openshift-tests/dns-test-output.rc"
+assert_verdict "$case_dir" "Accepted with risks"
+grep -Fq "openshift-tests returned rc=1 with no selected DNS test failures" "$case_dir/05-report/verdict-risk-reasons.txt"
+
+case_dir="$TMP_DIR/external-risk"
+write_common_success_artifacts "$case_dir"
+sed -i '/registry.redhat.io/,$d' "$case_dir/02-node-sweep/node-dns-sweep.txt"
+assert_verdict "$case_dir" "Accepted with risks"
+grep -Fq "External DNS lookup missing on 1 of 1 swept nodes" "$case_dir/05-report/verdict-risk-reasons.txt"
+
+case_dir="$TMP_DIR/internal-blocked"
+write_common_success_artifacts "$case_dir"
+sed -i '/openshift.default.svc/,+1d' "$case_dir/02-node-sweep/node-dns-sweep.txt"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Node sweep internal lookups incomplete" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/node-count-blocked"
+write_common_success_artifacts "$case_dir"
+cat >>"$case_dir/00-preflight/nodes-wide.txt" <<'EOF'
+node-b   Ready    worker   1d    v1.31.0   192.0.2.12
+EOF
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Node sweep did not cover all nodes: swept=1, cluster-nodes=2" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/dnsperf-blocked"
+write_common_success_artifacts "$case_dir"
+sed -i $'s/100\\t0/100\\t1/' "$case_dir/03-dnsperf/dnsperf-summary.tsv"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "dnsperf failed qps steps: 100" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/perf-tests-risk"
+write_common_success_artifacts "$case_dir"
+echo "7" >"$case_dir/04-perf-tests/perf-tests-run.rc"
+assert_verdict "$case_dir" "Accepted with risks"
+grep -Fq "Optional perf-tests returned rc=7" "$case_dir/05-report/verdict-risk-reasons.txt"

@@ -14,11 +14,13 @@ bash -n tests/discover-dns-tests-exclude.sh
 bash -n tests/extract-tests-empty-target.sh
 bash -n tests/preflight-dns-operator-gate.sh
 bash -n tests/report-results-summary.sh
+bash -n tests/results-verdict.sh
 
 bash tests/discover-dns-tests-exclude.sh
 bash tests/extract-tests-empty-target.sh
 bash tests/preflight-dns-operator-gate.sh
 bash tests/report-results-summary.sh
+bash tests/results-verdict.sh
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
@@ -30,7 +32,8 @@ shellcheck -x \
   tests/discover-dns-tests-exclude.sh \
   tests/extract-tests-empty-target.sh \
   tests/preflight-dns-operator-gate.sh \
-  tests/report-results-summary.sh
+  tests/report-results-summary.sh \
+  tests/results-verdict.sh
 
 # shellcheck disable=SC2016
 if ! grep -Fq 'source "$PROJECT_DIR/lib/results.sh"' dns-validation/bin/ocp-dns-validate; then

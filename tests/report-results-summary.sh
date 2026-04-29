@@ -168,19 +168,25 @@ grep -Fq -- "- kubernetes.default.svc observed: 2/2" "$REPORT"
 grep -Fq -- "- openshift.default.svc observed: 2/2" "$REPORT"
 grep -Fq -- "- registry.redhat.io observed: 1/2" "$REPORT"
 grep -Fq "## DNS validation verdict" "$REPORT"
-grep -Fq -- "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." "$REPORT"
+grep -Fq -- "- Verdict: Blocked" "$REPORT"
+grep -Fq "Selected DNS conformance tests failed: failed=1" "$REPORT"
+grep -Fq "dnsperf failed qps steps: 500" "$REPORT"
+grep -Fq "Selected DNS conformance tests included skipped results: skipped=1" "$REPORT"
+grep -Fq "DNS conformance tests were excluded: excluded=2" "$REPORT"
+grep -Fq "External DNS lookup missing on 1 of 2 swept nodes" "$REPORT"
+grep -Fq "Optional perf-tests returned rc=7" "$REPORT"
 
 grep -Fq "## Results summary" "$TMP_DIR/report.out"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$TMP_DIR/report.out"
 grep -Fq "## dnsperf detailed stats" "$TMP_DIR/report.out"
 
-if [[ "$(tail -n 1 "$REPORT")" != "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." ]]; then
+if [[ "$(tail -n 1 "$REPORT")" != *"Optional perf-tests returned rc=7"* ]]; then
   echo "report should end with the results summary" >&2
   tail -n 20 "$REPORT" >&2
   exit 1
 fi
 
-if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." ]]; then
+if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != *"Optional perf-tests returned rc=7"* ]]; then
   echo "terminal output should end with the results summary" >&2
   tail -n 20 "$TMP_DIR/report.out" >&2
   exit 1

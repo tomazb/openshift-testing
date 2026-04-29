@@ -31,6 +31,193 @@ results_read_artifact_rc() {
   fi
 }
 
+results_reason_line() {
+  local reason="$1"
+  local artifact="${2:-}"
+  if [[ -n "$artifact" ]]; then
+    printf -- "- %s (artifact: \`%s\`)\n" "$reason" "$artifact"
+  else
+    printf -- '- %s\n' "$reason"
+  fi
+}
+
+results_add_blocking_reason() {
+  local reason="$1"
+  local artifact="${2:-}"
+  results_reason_line "$reason" "$artifact" >>"$ARTIFACT_DIR/05-report/verdict-blocking-reasons.txt"
+}
+
+results_add_risk_reason() {
+  local reason="$1"
+  local artifact="${2:-}"
+  results_reason_line "$reason" "$artifact" >>"$ARTIFACT_DIR/05-report/verdict-risk-reasons.txt"
+}
+
+results_dns_operator_gate_values() {
+  local file="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
+  local available="unknown"
+  local progressing="unknown"
+  local degraded="unknown"
+
+  if [[ -s "$file" ]]; then
+    available="$(awk -F= '$1 == "Available" {print $2}' "$file")"
+    progressing="$(awk -F= '$1 == "Progressing" {print $2}' "$file")"
+    degraded="$(awk -F= '$1 == "Degraded" {print $2}' "$file")"
+  fi
+
+  printf '%s\t%s\t%s\n' "${available:-unknown}" "${progressing:-unknown}" "${degraded:-unknown}"
+}
+
+results_node_sweep_counts() {
+  local file="$ARTIFACT_DIR/02-node-sweep/node-dns-sweep.txt"
+  if [[ ! -s "$file" ]]; then
+    printf '0\t0\t0\t0\n'
+    return
+  fi
+
+  awk '
+    function flush_block() {
+      if (!in_block) return
+      nodes++
+      if (block ~ /kubernetes\.default\.svc\./ && block ~ /Address:[[:space:]]*[0-9]/) kubernetes++
+      if (block ~ /openshift\.default\.svc\./ && block ~ /Address:[[:space:]]*[0-9]/) openshift++
+      if (block ~ /registry\.redhat\.io[[:space:]]+canonical name/ || block ~ /Name:[[:space:]]*registry\.redhat\.io/ || block ~ /registry-proxy/) external++
+    }
+    /^### pod=/ {
+      flush_block()
+      in_block = 1
+      block = $0 "\n"
+      next
+    }
+    {
+      if (in_block) block = block $0 "\n"
+    }
+    END {
+      flush_block()
+      printf "%d\t%d\t%d\t%d\n", nodes, kubernetes, openshift, external
+    }
+  ' "$file"
+}
+
+results_cluster_node_count() {
+  local file="$ARTIFACT_DIR/00-preflight/nodes-wide.txt"
+  if [[ -s "$file" ]]; then
+    awk 'NR > 1 && NF > 0 { count++ } END { print count + 0 }' "$file"
+  else
+    echo 0
+  fi
+}
+
+results_compute_verdict() {
+  local report_dir="$ARTIFACT_DIR/05-report"
+  mkdir -p "$report_dir"
+  : >"$report_dir/verdict-blocking-reasons.txt"
+  : >"$report_dir/verdict-risk-reasons.txt"
+
+  local gate="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
+  local available progressing degraded gate_values
+  gate_values="$(results_dns_operator_gate_values)"
+  IFS=$'\t' read -r available progressing degraded <<<"$gate_values"
+  if [[ ! -s "$gate" ]]; then
+    results_add_blocking_reason "DNS operator gate artifact missing" "$gate"
+  elif [[ "$available" != "True" || "$progressing" != "False" || "$degraded" != "False" ]]; then
+    results_add_blocking_reason "DNS operator gate unhealthy: Available=$available, Progressing=$progressing, Degraded=$degraded" "$gate"
+  fi
+
+  local dns_summary="$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt"
+  local dns_rc_file="$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc"
+  local failed skipped excluded dns_rc
+  failed="$(results_count_dns_summary_status failed)"
+  skipped="$(results_count_dns_summary_status skipped)"
+  excluded="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt")"
+  dns_rc="$(results_read_artifact_rc "$dns_rc_file")"
+  if [[ ! -s "$dns_summary" ]]; then
+    results_add_blocking_reason "DNS conformance summary artifact missing" "$dns_summary"
+  elif [[ "$failed" != "0" ]]; then
+    results_add_blocking_reason "Selected DNS conformance tests failed: failed=$failed" "$dns_summary"
+  fi
+  if [[ "$dns_rc" != "0" && "$dns_rc" != "not run" && "$failed" == "0" ]]; then
+    results_add_risk_reason "openshift-tests returned rc=$dns_rc with no selected DNS test failures" "$dns_rc_file"
+  fi
+  if [[ "$skipped" != "0" ]]; then
+    results_add_risk_reason "Selected DNS conformance tests included skipped results: skipped=$skipped" "$dns_summary"
+  fi
+  if [[ "$excluded" != "0" ]]; then
+    results_add_risk_reason "DNS conformance tests were excluded: excluded=$excluded" "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt"
+  fi
+
+  local nodes kubernetes openshift external node_counts node_file cluster_nodes
+  node_file="$ARTIFACT_DIR/02-node-sweep/node-dns-sweep.txt"
+  node_counts="$(results_node_sweep_counts)"
+  IFS=$'\t' read -r nodes kubernetes openshift external <<<"$node_counts"
+  cluster_nodes="$(results_cluster_node_count)"
+  if [[ ! -s "$node_file" ]]; then
+    results_add_blocking_reason "Node DNS sweep artifact missing" "$node_file"
+  elif [[ "$cluster_nodes" != "0" && "$nodes" != "$cluster_nodes" ]]; then
+    results_add_blocking_reason "Node sweep did not cover all nodes: swept=$nodes, cluster-nodes=$cluster_nodes" "$node_file"
+  elif [[ "$nodes" == "0" || "$kubernetes" != "$nodes" || "$openshift" != "$nodes" ]]; then
+    results_add_blocking_reason "Node sweep internal lookups incomplete: kubernetes=$kubernetes/$nodes, openshift=$openshift/$nodes" "$node_file"
+  elif [[ "$external" != "$nodes" ]]; then
+    results_add_risk_reason "External DNS lookup missing on $((nodes - external)) of $nodes swept nodes" "$node_file"
+  fi
+
+  local dnsperf_file failed_qps
+  dnsperf_file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+  failed_qps="$(results_dnsperf_failure_qps)"
+  if [[ ! -s "$dnsperf_file" ]]; then
+    results_add_blocking_reason "dnsperf summary artifact missing" "$dnsperf_file"
+  elif [[ -n "$failed_qps" ]]; then
+    results_add_blocking_reason "dnsperf failed qps steps: $failed_qps" "$dnsperf_file"
+  fi
+
+  local perf_rc_file perf_rc deep_rc_file deep_rc
+  perf_rc_file="$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
+  perf_rc="$(results_read_artifact_rc "$perf_rc_file")"
+  if [[ "$perf_rc" == "not run" ]]; then
+    results_add_risk_reason "Optional perf-tests not run" "$perf_rc_file"
+  elif [[ "$perf_rc" != "0" ]]; then
+    results_add_risk_reason "Optional perf-tests returned rc=$perf_rc" "$perf_rc_file"
+  fi
+
+  deep_rc_file="$ARTIFACT_DIR/05-report/deep-diagnostics.rc"
+  deep_rc="$(results_read_artifact_rc "$deep_rc_file")"
+  if [[ "$deep_rc" != "0" && "$deep_rc" != "not run" ]]; then
+    results_add_risk_reason "deep diagnostics incomplete: rc=$deep_rc" "$deep_rc_file"
+  fi
+
+  if [[ -s "$report_dir/verdict-blocking-reasons.txt" ]]; then
+    echo "Blocked" >"$report_dir/verdict.txt"
+  elif [[ -s "$report_dir/verdict-risk-reasons.txt" ]]; then
+    echo "Accepted with risks" >"$report_dir/verdict.txt"
+  else
+    echo "Accepted" >"$report_dir/verdict.txt"
+  fi
+}
+
+results_verdict() {
+  local file="$ARTIFACT_DIR/05-report/verdict.txt"
+  [[ -s "$file" ]] || results_compute_verdict
+  cat "$file"
+}
+
+render_verdict_section() {
+  local verdict
+  verdict="$(results_verdict)"
+  cat <<EOF
+## DNS validation verdict
+
+- Verdict: $verdict
+EOF
+  if [[ -s "$ARTIFACT_DIR/05-report/verdict-blocking-reasons.txt" ]]; then
+    echo "- Blocking reasons:"
+    sed 's/^/  /' "$ARTIFACT_DIR/05-report/verdict-blocking-reasons.txt"
+  fi
+  if [[ -s "$ARTIFACT_DIR/05-report/verdict-risk-reasons.txt" ]]; then
+    echo "- Risk reasons:"
+    sed 's/^/  /' "$ARTIFACT_DIR/05-report/verdict-risk-reasons.txt"
+  fi
+}
+
 results_dns_operator_gate_summary() {
   local file="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
   local available="unknown"
@@ -236,11 +423,14 @@ EOF
 
 render_node_sweep_stats() {
   local file="$ARTIFACT_DIR/02-node-sweep/node-dns-sweep.txt"
+  local cluster_nodes
+  cluster_nodes="$(results_cluster_node_count)"
 
   cat <<EOF
 ## Node DNS sweep stats
 
 EOF
+  echo "- Cluster nodes from preflight: $cluster_nodes"
 
   if [[ ! -s "$file" ]]; then
     echo "- Not run"
@@ -279,37 +469,7 @@ EOF
 }
 
 render_dns_validation_verdict() {
-  local dns_rc failed failed_qps dnsperf_file dns_phrase dnsperf_phrase monitor_phrase
-
-  dns_rc="$(results_read_artifact_rc "$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc")"
-  failed="$(results_count_dns_summary_status failed)"
-  failed_qps="$(results_dnsperf_failure_qps)"
-  dnsperf_file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
-
-  if [[ "$failed" != "0" ]]; then
-    dns_phrase="DNS tests have failures"
-  else
-    dns_phrase="DNS tests passed"
-  fi
-
-  if [[ ! -s "$dnsperf_file" ]]; then
-    dnsperf_phrase="dnsperf not run"
-  elif [[ -n "$failed_qps" ]]; then
-    dnsperf_phrase="dnsperf has qps failures: $failed_qps"
-  else
-    dnsperf_phrase="dnsperf clean"
-  fi
-
-  monitor_phrase=""
-  if [[ "$dns_rc" != "0" && "$dns_rc" != "not run" && "$failed" == "0" ]]; then
-    monitor_phrase="openshift-tests rc=$dns_rc with no DNS test failures (monitor/invariant failures outside DNS scope)"
-  fi
-
-  cat <<EOF
-## DNS validation verdict
-
-- DNS validation: $dns_phrase; $dnsperf_phrase${monitor_phrase:+; $monitor_phrase}.
-EOF
+  render_verdict_section
 }
 
 render_results_summary() {

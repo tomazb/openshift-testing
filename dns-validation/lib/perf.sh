@@ -165,6 +165,7 @@ report() {
 
   local f="$ARTIFACT_DIR/05-report/dns-validation-report.md"
   local summary
+  results_compute_verdict
   summary="$(render_results_summary "$f")"
   cat >"$f" <<EOF
 # OpenShift DNS Validation Report
