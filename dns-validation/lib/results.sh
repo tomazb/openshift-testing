@@ -80,6 +80,7 @@ results_node_sweep_counts() {
       kubernetes_pending = 0
       openshift_pending = 0
       openshift_section = 0
+      external_pending = 0
     }
     function reset_node() {
       node_kubernetes = 0
@@ -124,11 +125,12 @@ results_node_sweep_counts() {
     /Address:[[:space:]]*[0-9]/ {
       if (kubernetes_pending) node_kubernetes = 1
       if (openshift_pending) node_openshift = 1
-      if (kubernetes_pending || openshift_pending) reset_query()
+      if (external_pending) node_external = 1
+      if (kubernetes_pending || openshift_pending || external_pending) reset_query()
       next
     }
-    /registry\.redhat\.io[[:space:]]+canonical name/ || /Name:[[:space:]]*registry\.redhat\.io/ || /registry-proxy/ {
-      node_external = 1
+    /registry\.redhat\.io[[:space:]]+canonical name/ || /Name:[[:space:]]*registry\.redhat\.io/ {
+      external_pending = 1
     }
     END {
       flush_block()
@@ -139,10 +141,32 @@ results_node_sweep_counts() {
 
 results_cluster_node_count() {
   local file="$ARTIFACT_DIR/00-preflight/nodes-wide.txt"
-  if [[ -s "$file" ]]; then
-    awk 'NR > 1 && NF > 0 { count++ } END { print count + 0 }' "$file"
+  local rc_file="$file.rc"
+  local rc count
+
+  if [[ -s "$rc_file" ]]; then
+    rc="$(results_read_artifact_rc "$rc_file")"
+    if [[ "$rc" != "0" ]]; then
+      echo "unavailable"
+      return
+    fi
+  fi
+
+  if [[ ! -s "$file" ]]; then
+    echo "unavailable"
+    return
+  fi
+
+  if ! awk 'NR == 1 { exit ($1 == "NAME" ? 0 : 1) }' "$file"; then
+    echo "unavailable"
+    return
+  fi
+
+  count="$(awk 'NR > 1 && NF > 0 { count++ } END { print count + 0 }' "$file")"
+  if [[ "$count" == "0" ]]; then
+    echo "unavailable"
   else
-    echo 0
+    echo "$count"
   fi
 }
 
@@ -189,9 +213,12 @@ results_compute_verdict() {
   node_counts="$(results_node_sweep_counts)"
   IFS=$'\t' read -r nodes kubernetes openshift external <<<"$node_counts"
   cluster_nodes="$(results_cluster_node_count)"
+  if [[ "$cluster_nodes" == "unavailable" ]]; then
+    results_add_blocking_reason "Cluster node count unavailable" "$ARTIFACT_DIR/00-preflight/nodes-wide.txt"
+  fi
   if [[ ! -s "$node_file" ]]; then
     results_add_blocking_reason "Node DNS sweep artifact missing" "$node_file"
-  elif [[ "$cluster_nodes" != "0" && "$nodes" != "$cluster_nodes" ]]; then
+  elif [[ "$cluster_nodes" != "unavailable" && "$nodes" != "$cluster_nodes" ]]; then
     results_add_blocking_reason "Node sweep did not cover all nodes: swept=$nodes, cluster-nodes=$cluster_nodes" "$node_file"
   elif [[ "$nodes" == "0" || "$kubernetes" != "$nodes" || "$openshift" != "$nodes" ]]; then
     results_add_blocking_reason "Node sweep internal lookups incomplete: kubernetes=$kubernetes/$nodes, openshift=$openshift/$nodes" "$node_file"

@@ -94,6 +94,26 @@ write_common_success_artifacts "$case_dir"
 echo "7" >"$case_dir/05-report/deep-diagnostics.rc"
 assert_verdict "$case_dir" "Accepted"
 
+case_dir="$TMP_DIR/missing-node-count-blocked"
+write_common_success_artifacts "$case_dir"
+rm "$case_dir/00-preflight/nodes-wide.txt"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Cluster node count unavailable" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/node-count-rc-blocked"
+write_common_success_artifacts "$case_dir"
+echo "1" >"$case_dir/00-preflight/nodes-wide.txt.rc"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Cluster node count unavailable" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/malformed-node-count-blocked"
+write_common_success_artifacts "$case_dir"
+cat >"$case_dir/00-preflight/nodes-wide.txt" <<'EOF'
+node-a   Ready    worker   1d    v1.31.0   192.0.2.11
+EOF
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Cluster node count unavailable" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
 case_dir="$TMP_DIR/dns-operator-blocked"
 write_common_success_artifacts "$case_dir"
 sed -i 's/Available=True/Available=False/' "$case_dir/00-preflight/dns-operator-gate.txt"
@@ -118,6 +138,23 @@ grep -Fq "openshift-tests returned rc=1 with no selected DNS test failures" "$ca
 case_dir="$TMP_DIR/external-risk"
 write_common_success_artifacts "$case_dir"
 sed -i '/registry.redhat.io/,$d' "$case_dir/02-node-sweep/node-dns-sweep.txt"
+assert_verdict "$case_dir" "Accepted with risks"
+grep -Fq "External DNS lookup missing on 1 of 1 swept nodes" "$case_dir/05-report/verdict-risk-reasons.txt"
+
+case_dir="$TMP_DIR/external-cname-only-risk"
+write_common_success_artifacts "$case_dir"
+cat >"$case_dir/02-node-sweep/node-dns-sweep.txt" <<'EOF'
+### pod=dns-sweep-a node=node-a
+Server: 172.30.0.10
+Name: kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+Server: 172.30.0.10
+Name: openshift.default.svc.cluster.local
+Address: 172.30.0.1
+Server: 172.30.0.10
+registry.redhat.io canonical name = registry-proxy.example.test.
+** server can't find registry-proxy.example.test: NXDOMAIN
+EOF
 assert_verdict "$case_dir" "Accepted with risks"
 grep -Fq "External DNS lookup missing on 1 of 1 swept nodes" "$case_dir/05-report/verdict-risk-reasons.txt"
 
