@@ -82,7 +82,8 @@ results_node_sweep_counts() {
       openshift_section = 0
       external_pending = 0
     }
-    function reset_node() {
+    function reset_node(node_name) {
+      current_node = node_name
       node_kubernetes = 0
       node_openshift = 0
       node_external = 0
@@ -90,15 +91,22 @@ results_node_sweep_counts() {
     }
     function flush_block() {
       if (!in_block) return
-      nodes++
-      if (node_kubernetes) kubernetes++
-      if (node_openshift) openshift++
-      if (node_external) external++
+      if (current_node == "") return
+      seen_nodes[current_node] = 1
+      if (node_kubernetes) kubernetes_nodes[current_node] = 1
+      if (node_openshift) openshift_nodes[current_node] = 1
+      if (node_external) external_nodes[current_node] = 1
     }
     /^### pod=/ {
+      node_name = ""
+      header = $0
+      if (sub(/^.*[[:space:]]node=/, "", header)) {
+        split(header, header_parts, /[[:space:]]+/)
+        node_name = header_parts[1]
+      }
       flush_block()
       in_block = 1
-      reset_node()
+      reset_node(node_name)
       next
     }
     !in_block {
@@ -138,6 +146,12 @@ results_node_sweep_counts() {
     }
     END {
       flush_block()
+      for (node in seen_nodes) {
+        nodes++
+        if (node in kubernetes_nodes) kubernetes++
+        if (node in openshift_nodes) openshift++
+        if (node in external_nodes) external++
+      }
       printf "%d\t%d\t%d\t%d\n", nodes, kubernetes, openshift, external
     }
   ' "$file"
@@ -230,11 +244,14 @@ results_compute_verdict() {
     results_add_risk_reason "External DNS lookup missing on $((nodes - external)) of $nodes swept nodes" "$node_file"
   fi
 
-  local dnsperf_file failed_qps
+  local dnsperf_file failed_qps dnsperf_qps_count
   dnsperf_file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
   failed_qps="$(results_dnsperf_failure_qps)"
+  dnsperf_qps_count="$(results_dnsperf_qps_count)"
   if [[ ! -s "$dnsperf_file" ]]; then
     results_add_blocking_reason "dnsperf summary artifact missing" "$dnsperf_file"
+  elif [[ "$dnsperf_qps_count" == "0" ]]; then
+    results_add_blocking_reason "dnsperf summary has no qps results" "$dnsperf_file"
   elif [[ -n "$failed_qps" ]]; then
     results_add_blocking_reason "dnsperf failed qps steps: $failed_qps" "$dnsperf_file"
   fi
@@ -326,6 +343,16 @@ results_dnsperf_failure_qps() {
   local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
   [[ -s "$file" ]] || return 0
   awk -F '\t' 'NR > 1 && $2 != "0" { failed = failed ? failed ", " $1 : $1 } END { print failed }' "$file"
+}
+
+results_dnsperf_qps_count() {
+  local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+  if [[ ! -s "$file" ]]; then
+    echo 0
+    return
+  fi
+
+  awk -F '\t' 'NR > 1 && NF > 0 { count++ } END { print count + 0 }' "$file"
 }
 
 results_resolve_artifact_path() {

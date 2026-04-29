@@ -222,11 +222,43 @@ EOF
 assert_verdict "$case_dir" "Blocked"
 grep -Fq "Node sweep did not cover all nodes: swept=1, cluster-nodes=2" "$case_dir/05-report/verdict-blocking-reasons.txt"
 
+case_dir="$TMP_DIR/duplicate-node-blocked"
+write_common_success_artifacts "$case_dir"
+cat >>"$case_dir/00-preflight/nodes-wide.txt" <<'EOF'
+node-b   Ready    worker   1d    v1.31.0   192.0.2.12
+EOF
+cat >"$case_dir/02-node-sweep/node-dns-sweep.txt" <<'EOF'
+### pod=dns-sweep-a node=node-a
+Server: 172.30.0.10
+Name: kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+Name: openshift.default.svc.cluster.local
+Address: 172.30.0.1
+Name: registry.redhat.io
+Address: 192.0.2.10
+### pod=dns-sweep-b node=node-a
+Server: 172.30.0.10
+Name: kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+Name: openshift.default.svc.cluster.local
+Address: 172.30.0.1
+Name: registry.redhat.io
+Address: 192.0.2.10
+EOF
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Node sweep did not cover all nodes: swept=1, cluster-nodes=2" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
 case_dir="$TMP_DIR/dnsperf-blocked"
 write_common_success_artifacts "$case_dir"
 sed -i $'s/100\\t0/100\\t1/' "$case_dir/03-dnsperf/dnsperf-summary.tsv"
 assert_verdict "$case_dir" "Blocked"
 grep -Fq "dnsperf failed qps steps: 100" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/dnsperf-header-only-blocked"
+write_common_success_artifacts "$case_dir"
+printf 'qps\trc\tlog\n' >"$case_dir/03-dnsperf/dnsperf-summary.tsv"
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "dnsperf summary has no qps results" "$case_dir/05-report/verdict-blocking-reasons.txt"
 
 case_dir="$TMP_DIR/perf-tests-risk"
 write_common_success_artifacts "$case_dir"
