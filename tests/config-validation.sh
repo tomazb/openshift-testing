@@ -45,3 +45,29 @@ if [[ -f "$TMP_DIR/artifacts/00-preflight/oc-version.txt" ]]; then
   echo "init should not run after config validation fails" >&2
   exit 1
 fi
+
+set +e
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config --yes init >"$TMP_DIR/missing-config-value.out" 2>&1
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "--config without a file path should fail" >&2
+  exit 1
+fi
+grep -Fq -- "--config requires a file path" "$TMP_DIR/missing-config-value.out"
+
+UNREADABLE_CONFIG="$TMP_DIR/unreadable.env"
+printf 'ARTIFACT_DIR=%q\n' "$TMP_DIR/unreadable-artifacts" >"$UNREADABLE_CONFIG"
+chmod 000 "$UNREADABLE_CONFIG"
+set +e
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$UNREADABLE_CONFIG" init >"$TMP_DIR/unreadable-config.out" 2>&1
+rc=$?
+chmod 600 "$UNREADABLE_CONFIG"
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "unreadable explicit config should fail" >&2
+  exit 1
+fi
+grep -Fq "config file not found or not readable" "$TMP_DIR/unreadable-config.out"

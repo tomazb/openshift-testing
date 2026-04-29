@@ -75,6 +75,9 @@ EOF
 
   run oc apply -f "$manifest"
   run_out "$d/dnsperf-pod-wait.txt" oc -n "$VALIDATION_NAMESPACE" wait pod/dnsperf --for=condition=Ready --timeout=180s
+  local wait_rc
+  wait_rc="$(results_read_artifact_rc "$d/dnsperf-pod-wait.txt.rc")"
+  [[ "$wait_rc" == "0" ]] || fail "dnsperf pod did not become Ready (rc=$wait_rc). See $d/dnsperf-pod-wait.txt"
 
   echo -e "qps\trc\tlog" >"$d/dnsperf-summary.tsv"
   local extra_args=()

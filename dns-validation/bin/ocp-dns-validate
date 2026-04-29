@@ -41,7 +41,7 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -c|--config)
-      [[ $# -ge 2 ]] || { echo "ERROR: --config requires a file path" >&2; exit 2; }
+      [[ $# -ge 2 && -n "${2:-}" && "${2:0:1}" != "-" ]] || { echo "ERROR: --config requires a file path" >&2; exit 2; }
       CONFIG_FILE="$2"
       CONFIG_FILE_EXPLICIT="true"
       shift 2
@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -f "$CONFIG_FILE" ]]; then
+if [[ -f "$CONFIG_FILE" && -r "$CONFIG_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$CONFIG_FILE"
 elif [[ "$CONFIG_FILE_EXPLICIT" == "true" ]]; then

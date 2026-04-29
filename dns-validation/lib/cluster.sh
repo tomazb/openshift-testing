@@ -294,6 +294,9 @@ EOF
 
   run oc apply -f "$manifest"
   run_out "$d/dns-sweep-rollout.txt" oc -n "$VALIDATION_NAMESPACE" rollout status ds/dns-sweep --timeout=180s
+  local rollout_rc
+  rollout_rc="$(results_read_artifact_rc "$d/dns-sweep-rollout.txt.rc")"
+  [[ "$rollout_rc" == "0" ]] || fail "dns-sweep rollout failed (rc=$rollout_rc). See $d/dns-sweep-rollout.txt"
 
   : >"$result"
   for pod in $(oc -n "$VALIDATION_NAMESPACE" get pod -l app=dns-sweep -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true); do
