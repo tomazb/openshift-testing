@@ -219,6 +219,8 @@ grep -Fq -- "- openshift.default.svc observed: 2/2" "$REPORT"
 grep -Fq -- "- registry.redhat.io observed: 1/2" "$REPORT"
 grep -Fq "## DNS validation verdict" "$REPORT"
 grep -Fq -- "- Verdict: Blocked" "$REPORT"
+grep -Fq -- "- Blocking reasons:" "$REPORT"
+grep -Fq -- "- Risk reasons:" "$REPORT"
 grep -Fq "Selected DNS conformance tests failed: failed=1" "$REPORT"
 grep -Fq "dnsperf failed qps steps: 500" "$REPORT"
 grep -Fq "Selected DNS conformance tests included skipped results: skipped=1" "$REPORT"
@@ -251,13 +253,13 @@ if grep -Fq -- "- DNS upstream resolvers: error: failed to fetch dns upstream re
 fi
 
 if [[ "$(tail -n 1 "$REPORT")" != *"Optional perf-tests returned rc=7"* ]]; then
-  echo "report should end with the results summary" >&2
+  echo "report should end with the structured verdict reasons" >&2
   tail -n 20 "$REPORT" >&2
   exit 1
 fi
 
 if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != *"Optional perf-tests returned rc=7"* ]]; then
-  echo "terminal output should end with the results summary" >&2
+  echo "terminal output should end with the structured verdict reasons" >&2
   tail -n 20 "$TMP_DIR/report.out" >&2
   exit 1
 fi

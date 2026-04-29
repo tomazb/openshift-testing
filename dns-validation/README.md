@@ -84,6 +84,15 @@ DNSPERF_QPS_STEPS="100 500 1000 2000"
 DNSPERF_DURATION_SECONDS="60"
 ```
 
+Optional dnsperf verdict thresholds can block the verdict on loss or average latency while still keeping the per-QPS command return code gate:
+
+```text
+DNSPERF_MAX_LOST_PERCENT="0.0"
+DNSPERF_MAX_AVG_LATENCY_SECONDS="0.005"
+```
+
+Leave these values empty to use only the dnsperf command return code per QPS step.
+
 ## Artifacts
 
 Each run writes artifacts under `runs/<timestamp>/` unless `ARTIFACT_DIR` is explicitly configured.
@@ -105,6 +114,24 @@ The generated report is:
 ```text
 runs/<timestamp>/05-report/dns-validation-report.md
 ```
+
+## Verdicts and diagnostics
+
+The report computes a structured DNS validation verdict:
+
+- `Accepted`: required DNS checks passed and no risk-only conditions were found.
+- `Accepted with risks`: DNS appears usable, but evidence is incomplete or adjacent symptoms were found.
+- `Blocked`: a direct DNS validation failure was found.
+
+The tool captures lightweight diagnostics during normal validation, including DNS operator state, DNS workloads, DNS events, CoreDNS pod placement, upstream resolver mode, and node-sweep lookup summaries.
+
+When the preliminary verdict is `Blocked` or `Accepted with risks`, report generation also captures deep diagnostics under:
+
+```text
+runs/<timestamp>/05-report/deep-diagnostics/
+```
+
+Deep diagnostics include DNS pod logs, DNS operator logs, pod descriptions, and relevant events. If deep diagnostics collection is incomplete, the original verdict remains intact and the report adds a risk reason.
 
 ## Design choices
 
