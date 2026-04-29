@@ -9,6 +9,7 @@ generate_queries() {
   local d="$ARTIFACT_DIR/03-dnsperf"
   local seed="$d/queries.seed.txt"
   local query_file="$d/queries.ocp.txt"
+  local repeat_count="${QUERY_REPEAT_COUNT:-1000}"
 
   if [[ -f "$CUSTOM_QUERY_SEED" ]]; then
     cp "$CUSTOM_QUERY_SEED" "$seed"
@@ -24,9 +25,9 @@ EOF
   fi
 
   if command -v shuf >/dev/null 2>&1; then
-    for _ in $(seq 1 "$QUERY_REPEAT_COUNT"); do cat "$seed"; done | shuf >"$query_file"
+    for _ in $(seq 1 "$repeat_count"); do cat "$seed"; done | shuf >"$query_file"
   else
-    for _ in $(seq 1 "$QUERY_REPEAT_COUNT"); do cat "$seed"; done >"$query_file"
+    for _ in $(seq 1 "$repeat_count"); do cat "$seed"; done >"$query_file"
   fi
 
   write_runtime_kv DNSPERF_QUERY_FILE "$query_file"
@@ -46,7 +47,7 @@ run_dnsperf() {
   local manifest="$d/dnsperf-pod.yaml"
   local rc=0
 
-  oc -n "$VALIDATION_NAMESPACE" delete pod dnsperf configmap dnsperf-queries --ignore-not-found=true >/dev/null 2>&1 || true
+  oc -n "$VALIDATION_NAMESPACE" delete pod/dnsperf configmap/dnsperf-queries --ignore-not-found=true >/dev/null 2>&1 || true
   run oc -n "$VALIDATION_NAMESPACE" create configmap dnsperf-queries --from-file=queries.txt="$DNSPERF_QUERY_FILE"
 
   cat >"$manifest" <<EOF
@@ -113,11 +114,15 @@ run_perf_tests() {
 
   local d="$ARTIFACT_DIR/04-perf-tests"
   local repo="$d/perf-tests"
+  local query_file_abs="$DNSPERF_QUERY_FILE"
   local maxqps="["
   local qps rc=0
 
+  [[ "$repo" == /* ]] || repo="${PWD%/}/$repo"
+  [[ "$query_file_abs" == /* ]] || query_file_abs="${PWD%/}/$query_file_abs"
+
   [[ -d "$repo/.git" ]] || run git clone --depth 1 --branch "$PERF_TESTS_REF" "$PERF_TESTS_REPO" "$repo"
-  cp "$DNSPERF_QUERY_FILE" "$repo/dns/queries/ocp-custom.txt"
+  cp "$query_file_abs" "$repo/dns/queries/ocp-custom.txt"
 
   for qps in $PERF_TESTS_MAX_QPS; do
     [[ "$maxqps" != "[" ]] && maxqps+=", "

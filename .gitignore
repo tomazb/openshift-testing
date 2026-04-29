@@ -10,3 +10,4 @@ dns-validation/config/validation.env
 # Python / local tooling
 .venv/
 __pycache__/
+.codex
