@@ -106,7 +106,9 @@ discover_dns_tests() {
   "$OPENSHIFT_TESTS_BIN" run openshift/conformance/serial --dry-run 2>"$d/dry-run-serial.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >"$d/dns-serial-candidates.txt"
   set -e
 
-  [[ "$INCLUDE_SERIAL_DNS_TESTS" == true ]] && cat "$d/dns-serial-candidates.txt" >>"$raw" || true
+  if [[ "$INCLUDE_SERIAL_DNS_TESTS" == true ]]; then
+    cat "$d/dns-serial-candidates.txt" >>"$raw"
+  fi
   sort -u "$raw" >"$d/dns-tests.txt"
   if [[ ! -s "$d/dns-tests.txt" ]]; then
     fail "DNS test discovery produced no matches. Check $d/dry-run-*.stderr.log and DNS_TEST_REGEX='$DNS_TEST_REGEX'."
