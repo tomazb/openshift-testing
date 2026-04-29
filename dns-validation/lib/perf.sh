@@ -77,9 +77,10 @@ EOF
 
   echo -e "qps\trc\tlog" >"$d/dnsperf-summary.tsv"
   local extra_args=()
+  # DNSPERF_EXTRA_ARGS is a space-separated list of extra dnsperf flags,
+  # e.g. DNSPERF_EXTRA_ARGS="-c 10 -t 5"
   if [[ -n "${DNSPERF_EXTRA_ARGS:-}" ]]; then
-    # shellcheck disable=SC2206
-    extra_args=($DNSPERF_EXTRA_ARGS)
+    read -ra extra_args <<< "$DNSPERF_EXTRA_ARGS"
   fi
   for qps in $DNSPERF_QPS_STEPS; do
     local out="$d/dnsperf-qps-${qps}.log"
