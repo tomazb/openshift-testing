@@ -43,6 +43,8 @@ run_out() {
   set -e
   echo "$rc" >"$out.rc"
   [[ $rc -eq 0 ]] || warn "rc=$rc for $*; see $out"
+  # Always return 0: run_out is an artifact-capture helper; command exit
+  # codes are persisted to $out.rc for callers that need them.
   return 0
 }
 
