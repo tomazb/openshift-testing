@@ -34,6 +34,7 @@ The text frontend exposes the validation steps in a controlled order:
 11) Generate markdown report
 12) Cleanup validation namespace
 13) Run recommended sequence
+14) Show artifact paths
 ```
 
 ## Non-interactive run
