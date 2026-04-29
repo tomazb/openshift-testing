@@ -259,7 +259,9 @@ results_compute_verdict() {
   local perf_rc_file perf_rc
   perf_rc_file="$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
   perf_rc="$(results_read_artifact_rc "$perf_rc_file")"
-  if [[ "$perf_rc" != "0" && "$perf_rc" != "not run" ]]; then
+  if [[ "$perf_rc" == "not run" ]]; then
+    results_add_risk_reason "Optional perf-tests not run" "$perf_rc_file"
+  elif [[ "$perf_rc" != "0" ]]; then
     results_add_risk_reason "Optional perf-tests returned rc=$perf_rc" "$perf_rc_file"
   fi
 

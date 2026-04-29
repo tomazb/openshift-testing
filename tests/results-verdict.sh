@@ -110,10 +110,11 @@ Address: 2001:db8::10
 EOF
 assert_verdict "$case_dir" "Accepted"
 
-case_dir="$TMP_DIR/perf-tests-missing-accepted"
+case_dir="$TMP_DIR/perf-tests-missing-risk"
 write_common_success_artifacts "$case_dir"
 rm "$case_dir/04-perf-tests/perf-tests-run.rc"
-assert_verdict "$case_dir" "Accepted"
+assert_verdict "$case_dir" "Accepted with risks"
+grep -Fq "Optional perf-tests not run" "$case_dir/05-report/verdict-risk-reasons.txt"
 
 case_dir="$TMP_DIR/deep-diagnostics-ignored"
 write_common_success_artifacts "$case_dir"
