@@ -85,8 +85,7 @@ EOF
   fi
   for qps in $DNSPERF_QPS_STEPS; do
     local out="$d/dnsperf-qps-${qps}.log"
-    set +e
-    oc -n "$VALIDATION_NAMESPACE" exec dnsperf -- dnsperf \
+    if oc -n "$VALIDATION_NAMESPACE" exec dnsperf -- dnsperf \
       -s "$CLUSTER_DNS_IP" \
       -d /queries/queries.txt \
       -l "$DNSPERF_DURATION_SECONDS" \
@@ -94,9 +93,11 @@ EOF
       -T "$DNSPERF_THREADS" \
       -Q "$qps" \
       -S "$DNSPERF_STATS_INTERVAL" \
-      "${extra_args[@]}" >"$out" 2>&1
-    rc=$?
-    set -e
+      "${extra_args[@]}" >"$out" 2>&1; then
+      rc=0
+    else
+      rc=$?
+    fi
     echo -e "${qps}\t${rc}\t${out}" >>"$d/dnsperf-summary.tsv"
   done
 
@@ -151,10 +152,11 @@ EOF
     *) fail "Unsupported PERF_TESTS_MODE=$PERF_TESTS_MODE" ;;
   esac
 
-  set +e
-  (cd "$repo/dns" && PATH="$repo/dns/.ocp-bin:$PATH" "${cmd[@]}") >"$d/perf-tests-run.log" 2>&1
-  rc=$?
-  set -e
+  if (cd "$repo/dns" && PATH="$repo/dns/.ocp-bin:$PATH" "${cmd[@]}") >"$d/perf-tests-run.log" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
   echo "$rc" >"$d/perf-tests-run.rc"
   [[ $rc -eq 0 ]] || warn "perf-tests rc=$rc; see $d/perf-tests-run.log"
 }
@@ -167,7 +169,7 @@ report() {
   local summary verdict
   results_compute_verdict
   verdict="$(results_verdict)"
-  if [[ "$verdict" != "Accepted" ]]; then
+  if [[ "$verdict" != "$VERDICT_ACCEPTED" ]]; then
     collect_deep_diagnostics
     results_compute_verdict
   fi

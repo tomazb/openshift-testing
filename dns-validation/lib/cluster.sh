@@ -93,16 +93,9 @@ collect_lightweight_diagnostics() {
 
 collect_deep_run_out() {
   local out="$1"
-  local rc
   shift
 
-  run_out "$out" "$@"
-  if [[ -s "$out.rc" ]]; then
-    rc="$(tr -d '[:space:]' <"$out.rc")"
-    [[ "$rc" == "0" ]]
-  else
-    return 1
-  fi
+  run_out_checked "$out" "$@"
 }
 
 collect_deep_diagnostics() {
@@ -193,24 +186,18 @@ discover_dns_tests() {
   : >"$raw"
   : >"$excluded"
 
-  set +e
-  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/parallel --dry-run 2>"$d/dry-run-parallel.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
-  "$OPENSHIFT_TESTS_BIN" run kubernetes/conformance --dry-run 2>"$d/dry-run-k8s.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
-  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/serial --dry-run 2>"$d/dry-run-serial.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >"$d/dns-serial-candidates.txt"
-  set -e
+  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/parallel --dry-run 2>"$d/dry-run-parallel.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw" || true
+  "$OPENSHIFT_TESTS_BIN" run kubernetes/conformance --dry-run 2>"$d/dry-run-k8s.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw" || true
+  "$OPENSHIFT_TESTS_BIN" run openshift/conformance/serial --dry-run 2>"$d/dry-run-serial.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >"$d/dns-serial-candidates.txt" || true
 
   if [[ "$INCLUDE_SERIAL_DNS_TESTS" == true ]]; then
     cat "$d/dns-serial-candidates.txt" >>"$raw"
   fi
   sort -u "$raw" >"$candidates"
   if [[ -n "$DNS_TEST_EXCLUDE_REGEX" ]]; then
-    local exclude_rc filter_rc
-    set +e
-    grep -E "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$excluded"
-    exclude_rc=$?
-    grep -Ev "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$d/dns-tests.txt"
-    filter_rc=$?
-    set -e
+    local exclude_rc=0 filter_rc=0
+    grep -E "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$excluded" || exclude_rc=$?
+    grep -Ev "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$d/dns-tests.txt" || filter_rc=$?
     [[ $exclude_rc -eq 0 || $exclude_rc -eq 1 ]] || fail "Invalid DNS_TEST_EXCLUDE_REGEX='$DNS_TEST_EXCLUDE_REGEX'."
     [[ $filter_rc -eq 0 || $filter_rc -eq 1 ]] || fail "Invalid DNS_TEST_EXCLUDE_REGEX='$DNS_TEST_EXCLUDE_REGEX'."
   else
@@ -233,12 +220,9 @@ run_dns_tests() {
   local rc=0
   [[ -s "$d/dns-tests.txt" ]] || discover_dns_tests
 
-  set +e
-  "$OPENSHIFT_TESTS_BIN" run -f "$d/dns-tests.txt" --junit-dir "$d/junit" >"$d/dns-test-output.log" 2>&1
-  rc=$?
-  set -e
-
-  echo "$rc" >"$d/dns-test-output.rc"
+  log "+ $OPENSHIFT_TESTS_BIN run -f $d/dns-tests.txt --junit-dir $d/junit > $d/dns-test-output.log"
+  run_capture "$d/dns-test-output.log" "$d/dns-test-output.rc" \
+    "$OPENSHIFT_TESTS_BIN" run -f "$d/dns-tests.txt" --junit-dir "$d/junit" || rc=$?
   grep -E '^(passed|failed|skipped):' "$d/dns-test-output.log" >"$d/dns-summary.txt" || true
   if [[ $rc -eq 0 ]]; then
     log "DNS conformance passed."
@@ -251,19 +235,19 @@ run_single_test() {
   init_dirs
   ensure_tests
 
-  read -r -p "Full openshift-tests test name: " test_name
+  local test_name="${*:-}"
+  if [[ -z "$test_name" ]]; then
+    read -r -p "Full openshift-tests test name: " test_name || fail "No test name provided."
+  fi
   [[ -n "$test_name" ]] || fail "No test name provided."
 
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
   local f="$ARTIFACT_DIR/01-openshift-tests/single-test-${timestamp}.log"
   local rc=0
-  set +e
-  "$OPENSHIFT_TESTS_BIN" run-test "$test_name" >"$f" 2>&1
-  rc=$?
-  set -e
 
-  echo "$rc" >"$f.rc"
+  log "+ $OPENSHIFT_TESTS_BIN run-test $test_name > $f"
+  run_capture "$f" "$f.rc" "$OPENSHIFT_TESTS_BIN" run-test "$test_name" || rc=$?
   if [[ $rc -eq 0 ]]; then
     log "Single test passed."
   else

@@ -33,16 +33,32 @@ run() {
   return "${PIPESTATUS[0]}"
 }
 
+run_capture() {
+  local out="$1"
+  local rc_file="$2"
+  local rc
+  shift 2
+
+  ( set +e; "$@" >"$out" 2>&1; printf '%s\n' "$?" >"$rc_file" )
+  rc="$(tr -d '[:space:]' <"$rc_file" 2>/dev/null || true)"
+  [[ "$rc" =~ ^[0-9]+$ ]] || rc=1
+  return "$rc"
+}
+
+run_out_checked() {
+  local out="$1"
+  local rc=0
+  shift
+  log "+ $* > $out"
+  run_capture "$out" "$out.rc" "$@" || rc=$?
+  [[ $rc -eq 0 ]] || warn "rc=$rc for $*; see $out"
+  return "$rc"
+}
+
 run_out() {
   local out="$1"
   shift
-  log "+ $* > $out"
-  set +e
-  "$@" >"$out" 2>&1
-  local rc=$?
-  set -e
-  echo "$rc" >"$out.rc"
-  [[ $rc -eq 0 ]] || warn "rc=$rc for $*; see $out"
+  run_out_checked "$out" "$@" || true
   # Always return 0: run_out is an artifact-capture helper; command exit
   # codes are persisted to $out.rc for callers that need them.
   return 0

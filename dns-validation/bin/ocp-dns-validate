@@ -9,6 +9,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="$PROJECT_DIR/config/validation.env"
 CONFIG_FILE_EXPLICIT="false"
 ACTION="menu"
+ACTION_ARGS=()
 export AUTO_YES="false"
 
 usage() {
@@ -39,10 +40,20 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -c|--config) CONFIG_FILE="$2"; CONFIG_FILE_EXPLICIT="true"; shift 2 ;;
+    -c|--config)
+      [[ $# -ge 2 ]] || { echo "ERROR: --config requires a file path" >&2; exit 2; }
+      CONFIG_FILE="$2"
+      CONFIG_FILE_EXPLICIT="true"
+      shift 2
+      ;;
     -y|--yes) AUTO_YES="true"; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) ACTION="$1"; shift ;;
+    *)
+      ACTION="$1"
+      shift
+      ACTION_ARGS=("$@")
+      break
+      ;;
   esac
 done
 
@@ -80,6 +91,55 @@ PERF_TESTS_REF="${PERF_TESTS_REF:-v1.31.0}"
 PERF_TESTS_MODE="${PERF_TESTS_MODE:-cluster-dns}"
 PERF_TESTS_RUN_LENGTH_SECONDS="${PERF_TESTS_RUN_LENGTH_SECONDS:-60}"
 PERF_TESTS_MAX_QPS="${PERF_TESTS_MAX_QPS:-500 1000 2000}"
+
+config_error() {
+  echo "ERROR: Invalid config: $*" >&2
+  exit 2
+}
+
+validate_positive_integer() {
+  local name="$1" value="$2"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || config_error "$name must be a positive integer"
+}
+
+validate_positive_integer_list() {
+  local name="$1" value="$2" item
+  [[ -n "$value" ]] || config_error "$name must contain at least one positive integer"
+  for item in $value; do
+    validate_positive_integer "$name" "$item"
+  done
+}
+
+validate_optional_non_negative_number() {
+  local name="$1" value="$2"
+  [[ -z "$value" || "$value" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)$ ]] || config_error "$name must be a non-negative number"
+}
+
+validate_config() {
+  validate_positive_integer_list DNSPERF_QPS_STEPS "$DNSPERF_QPS_STEPS"
+  validate_positive_integer DNSPERF_DURATION_SECONDS "$DNSPERF_DURATION_SECONDS"
+  validate_positive_integer DNSPERF_CLIENTS "$DNSPERF_CLIENTS"
+  validate_positive_integer DNSPERF_THREADS "$DNSPERF_THREADS"
+  validate_positive_integer DNSPERF_STATS_INTERVAL "$DNSPERF_STATS_INTERVAL"
+  validate_positive_integer QUERY_REPEAT_COUNT "$QUERY_REPEAT_COUNT"
+  validate_optional_non_negative_number DNSPERF_MAX_LOST_PERCENT "$DNSPERF_MAX_LOST_PERCENT"
+  validate_optional_non_negative_number DNSPERF_MAX_AVG_LATENCY_SECONDS "$DNSPERF_MAX_AVG_LATENCY_SECONDS"
+  validate_positive_integer PERF_TESTS_RUN_LENGTH_SECONDS "$PERF_TESTS_RUN_LENGTH_SECONDS"
+  validate_positive_integer_list PERF_TESTS_MAX_QPS "$PERF_TESTS_MAX_QPS"
+
+  case "$INCLUDE_SERIAL_DNS_TESTS" in
+    true|false) ;;
+    *) config_error "INCLUDE_SERIAL_DNS_TESTS must be true or false" ;;
+  esac
+
+  case "$PERF_TESTS_MODE" in
+    cluster-dns|dns-ip|isolated-coredns) ;;
+    *) config_error "PERF_TESTS_MODE must be one of: cluster-dns, dns-ip, isolated-coredns" ;;
+  esac
+}
+
+validate_config
+
 export LOG_FILE="$ARTIFACT_DIR/ocp-dns-validate.log"
 export RUNTIME_ENV="$ARTIFACT_DIR/runtime.env"
 export OPENSHIFT_TESTS_BIN="$ARTIFACT_DIR/01-openshift-tests/openshift-tests"
@@ -157,7 +217,7 @@ case "$ACTION" in
   extract-tests) extract_tests ;;
   discover-dns-tests) discover_dns_tests ;;
   run-dns-tests) run_dns_tests ;;
-  run-single-test) run_single_test ;;
+  run-single-test) run_single_test "${ACTION_ARGS[@]}" ;;
   node-sweep) node_sweep ;;
   generate-queries) generate_queries ;;
   dnsperf) run_dnsperf ;;

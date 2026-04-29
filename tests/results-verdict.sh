@@ -286,6 +286,15 @@ DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_compute_verdict 
 grep -Fxq "Blocked" "$case_dir/05-report/verdict.txt"
 grep -Fq "dnsperf threshold failures: 100qps lost=0.17%" "$case_dir/05-report/verdict-blocking-reasons.txt"
 
+case_dir="$TMP_DIR/dnsperf-threshold-missing-log"
+write_common_success_artifacts "$case_dir"
+printf 'qps\trc\tlog\n100\t0\tdnsperf-qps-100.log\n' >"$case_dir/03-dnsperf/dnsperf-summary.tsv"
+rm "$case_dir/03-dnsperf/dnsperf-qps-100.log"
+DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null
+grep -Fxq "Blocked" "$case_dir/05-report/verdict.txt"
+grep -Fq "dnsperf threshold failures: 100qps log unavailable: dnsperf-qps-100.log" \
+  "$case_dir/05-report/verdict-blocking-reasons.txt"
+
 case_dir="$TMP_DIR/dnsperf-latency-threshold"
 write_common_success_artifacts "$case_dir"
 DNSPERF_MAX_AVG_LATENCY_SECONDS="0.000100" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null

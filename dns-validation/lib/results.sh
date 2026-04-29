@@ -3,6 +3,10 @@
 
 set -Eeuo pipefail
 
+VERDICT_ACCEPTED="Accepted"
+VERDICT_RISK="Accepted with risks"
+VERDICT_BLOCKED="Blocked"
+
 results_count_file_lines() {
   local file="$1"
   if [[ -s "$file" ]]; then
@@ -53,19 +57,28 @@ results_add_risk_reason() {
   results_reason_line "$reason" "$artifact" >>"$ARTIFACT_DIR/05-report/verdict-risk-reasons.txt"
 }
 
-results_dns_operator_gate_values() {
+results_parse_dns_operator_gate() {
   local file="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
-  local available="unknown"
-  local progressing="unknown"
-  local degraded="unknown"
 
   if [[ -s "$file" ]]; then
-    available="$(awk -F= '$1 == "Available" {print $2}' "$file")"
-    progressing="$(awk -F= '$1 == "Progressing" {print $2}' "$file")"
-    degraded="$(awk -F= '$1 == "Degraded" {print $2}' "$file")"
+    awk -F= '
+      BEGIN {
+        available = "unknown"
+        progressing = "unknown"
+        degraded = "unknown"
+      }
+      $1 == "Available" { available = $2 }
+      $1 == "Progressing" { progressing = $2 }
+      $1 == "Degraded" { degraded = $2 }
+      END { printf "%s\t%s\t%s\n", available, progressing, degraded }
+    ' "$file"
+  else
+    printf 'unknown\tunknown\tunknown\n'
   fi
+}
 
-  printf '%s\t%s\t%s\n' "${available:-unknown}" "${progressing:-unknown}" "${degraded:-unknown}"
+results_dns_operator_gate_values() {
+  results_parse_dns_operator_gate
 }
 
 results_node_sweep_counts() {
@@ -278,11 +291,11 @@ results_compute_verdict() {
   fi
 
   if [[ -s "$report_dir/verdict-blocking-reasons.txt" ]]; then
-    echo "Blocked" >"$report_dir/verdict.txt"
+    echo "$VERDICT_BLOCKED" >"$report_dir/verdict.txt"
   elif [[ -s "$report_dir/verdict-risk-reasons.txt" ]]; then
-    echo "Accepted with risks" >"$report_dir/verdict.txt"
+    echo "$VERDICT_RISK" >"$report_dir/verdict.txt"
   else
-    echo "Accepted" >"$report_dir/verdict.txt"
+    echo "$VERDICT_ACCEPTED" >"$report_dir/verdict.txt"
   fi
 }
 
@@ -311,16 +324,9 @@ EOF
 }
 
 results_dns_operator_gate_summary() {
-  local file="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
-  local available="unknown"
-  local progressing="unknown"
-  local degraded="unknown"
-
-  if [[ -f "$file" ]]; then
-    available="$(awk -F= '$1 == "Available" {print $2}' "$file")"
-    progressing="$(awk -F= '$1 == "Progressing" {print $2}' "$file")"
-    degraded="$(awk -F= '$1 == "Degraded" {print $2}' "$file")"
-  fi
+  local available progressing degraded gate_values
+  gate_values="$(results_parse_dns_operator_gate)"
+  IFS=$'\t' read -r available progressing degraded <<<"$gate_values"
 
   echo "Available=${available:-unknown}, Progressing=${progressing:-unknown}, Degraded=${degraded:-unknown}"
 }
@@ -395,7 +401,11 @@ results_resolve_artifact_path() {
 
   if [[ -s "$path" ]]; then
     echo "$path"
+  elif [[ "$path" == /* ]]; then
+    echo "$path"
   elif [[ -s "$base_dir/$path" ]]; then
+    echo "$base_dir/$path"
+  elif [[ -n "$base_dir" ]]; then
     echo "$base_dir/$path"
   else
     echo "$path"
@@ -464,6 +474,10 @@ results_dnsperf_log_threshold_failures() {
 
   while IFS=$'\t' read -r qps log_path; do
     resolved="$(results_resolve_artifact_path "$log_path" "$ARTIFACT_DIR/03-dnsperf")"
+    if [[ ! -s "$resolved" ]]; then
+      failures="${failures}${failures:+, }${qps}qps log unavailable: ${log_path:-$resolved}"
+      continue
+    fi
     stats="$(results_dnsperf_log_stats "$resolved")"
     IFS=$'\t' read -r _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes <<<"$stats"
     lost_pct="${lost_pct%%%}"
