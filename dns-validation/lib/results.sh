@@ -122,11 +122,15 @@ results_node_sweep_counts() {
       if (!openshift_section) kubernetes_pending = 1
       next
     }
-    /Address:[[:space:]]*[0-9]/ {
-      if (kubernetes_pending) node_kubernetes = 1
-      if (openshift_pending) node_openshift = 1
-      if (external_pending) node_external = 1
-      if (kubernetes_pending || openshift_pending || external_pending) reset_query()
+    /^Address:[[:space:]]*/ {
+      address = $0
+      sub(/^Address:[[:space:]]*/, "", address)
+      if (address != "" && address !~ /#/) {
+        if (kubernetes_pending) node_kubernetes = 1
+        if (openshift_pending) node_openshift = 1
+        if (external_pending) node_external = 1
+        if (kubernetes_pending || openshift_pending || external_pending) reset_query()
+      }
       next
     }
     /registry\.redhat\.io[[:space:]]+canonical name/ || /Name:[[:space:]]*registry\.redhat\.io/ {
