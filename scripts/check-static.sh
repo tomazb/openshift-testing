@@ -68,4 +68,9 @@ if grep -Fq "$bad_node_sweep_command" dns-validation/lib/cluster.sh; then
   exit 1
 fi
 
+if ! grep -Fq '````markdown' docs/superpowers/plans/2026-04-29-dns-validation-mvp-implementation.md; then
+  echo "implementation plan markdown examples with nested fences must use an outer quadruple fence" >&2
+  exit 1
+fi
+
 git diff --check

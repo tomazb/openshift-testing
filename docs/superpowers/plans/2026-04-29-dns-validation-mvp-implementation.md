@@ -1229,7 +1229,7 @@ Expected: PASS if earlier tasks already render structured verdicts. If it fails,
 
 Add this section after `## Artifacts`:
 
-```markdown
+````markdown
 ## Verdicts and diagnostics
 
 The report computes a structured DNS validation verdict:
@@ -1247,11 +1247,11 @@ runs/<timestamp>/05-report/deep-diagnostics/
 ```
 
 Deep diagnostics include DNS pod logs, DNS operator logs, pod descriptions, and relevant events. If deep diagnostics collection is incomplete, the original verdict remains intact and the report adds a risk reason.
-```
+````
 
 Add this threshold note under the existing dnsperf configuration example:
 
-```markdown
+````markdown
 Optional dnsperf verdict thresholds can block the verdict on loss or average latency while still keeping the per-QPS command return code gate:
 
 ```text
@@ -1260,7 +1260,7 @@ DNSPERF_MAX_AVG_LATENCY_SECONDS="0.005"
 ```
 
 Leave these values empty to use only the dnsperf command return code per QPS step.
-```
+````
 
 - [ ] **Step 4: Update top-level README summary**
 
