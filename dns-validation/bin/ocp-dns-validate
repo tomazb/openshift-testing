@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# OpenShift DNS validation automation with text menu frontend.
+set -Eeuo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+export SCRIPT_NAME
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="$PROJECT_DIR/config/validation.env"
+CONFIG_FILE_EXPLICIT="false"
+ACTION="menu"
+ACTION_ARGS=()
+export AUTO_YES="false"
+
+usage() {
+  cat <<USAGE
+Usage: $SCRIPT_NAME [--config FILE] [--yes] <action>
+
+Actions:
+  menu                 Interactive text frontend
+  init                 Check local tools and create artifact directories
+  preflight            Capture cluster and DNS baseline
+  extract-tests        Extract release-matched openshift-tests
+  discover-dns-tests   Discover DNS conformance tests
+  run-dns-tests        Run discovered DNS conformance tests
+  run-single-test      Run one openshift-tests test by full name
+  node-sweep           Run DNS smoke checks from one pod per node
+  generate-queries     Generate dnsperf query file
+  dnsperf              Run direct dnsperf QPS ladder against cluster DNS
+  perf-tests           Optional kubernetes/perf-tests/dns quick profile
+  report               Generate markdown report
+  cleanup              Delete validation namespace
+  all                  Run recommended sequence
+
+Examples:
+  bash bin/ocp-dns-validate --config config/validation.env menu
+  bash bin/ocp-dns-validate preflight
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c|--config)
+      [[ $# -ge 2 && -n "${2:-}" && "${2:0:1}" != "-" ]] || { echo "ERROR: --config requires a file path" >&2; exit 2; }
+      CONFIG_FILE="$2"
+      CONFIG_FILE_EXPLICIT="true"
+      shift 2
+      ;;
+    -y|--yes) AUTO_YES="true"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *)
+      ACTION="$1"
+      shift
+      ACTION_ARGS=("$@")
+      break
+      ;;
+  esac
+done
+
+if [[ -f "$CONFIG_FILE" && -r "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+elif [[ "$CONFIG_FILE_EXPLICIT" == "true" ]]; then
+  echo "ERROR: --config file not found or not readable: $CONFIG_FILE" >&2
+  exit 2
+fi
+
+RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+ARTIFACT_ROOT="${ARTIFACT_ROOT:-$PROJECT_DIR/runs}"
+ARTIFACT_DIR="${ARTIFACT_DIR:-$ARTIFACT_ROOT/$RUN_ID}"
+KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+VALIDATION_NAMESPACE="${VALIDATION_NAMESPACE:-dns-validation}"
+PULL_SECRET_FILE="${PULL_SECRET_FILE:-$HOME/pull-secret.json}"
+DNS_TEST_REGEX="${DNS_TEST_REGEX:-dns|\[sig-network\].*DNS}"
+DNS_TEST_EXCLUDE_REGEX="${DNS_TEST_EXCLUDE_REGEX:-}"
+INCLUDE_SERIAL_DNS_TESTS="${INCLUDE_SERIAL_DNS_TESTS:-false}"
+DNS_SWEEP_IMAGE="${DNS_SWEEP_IMAGE:-registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3}"
+DNSPERF_IMAGE="${DNSPERF_IMAGE:-docker.io/guessi/dnsperf:2.15.1-1}"
+DNSPERF_QPS_STEPS="${DNSPERF_QPS_STEPS:-100 500 1000 2000}"
+DNSPERF_DURATION_SECONDS="${DNSPERF_DURATION_SECONDS:-60}"
+DNSPERF_CLIENTS="${DNSPERF_CLIENTS:-5}"
+DNSPERF_THREADS="${DNSPERF_THREADS:-2}"
+DNSPERF_STATS_INTERVAL="${DNSPERF_STATS_INTERVAL:-10}"
+DNSPERF_EXTRA_ARGS="${DNSPERF_EXTRA_ARGS:-}"
+DNSPERF_MAX_LOST_PERCENT="${DNSPERF_MAX_LOST_PERCENT:-}"
+DNSPERF_MAX_AVG_LATENCY_SECONDS="${DNSPERF_MAX_AVG_LATENCY_SECONDS:-}"
+QUERY_REPEAT_COUNT="${QUERY_REPEAT_COUNT:-1000}"
+CUSTOM_QUERY_SEED="${CUSTOM_QUERY_SEED:-$PROJECT_DIR/queries/custom.seed.txt}"
+PERF_TESTS_REPO="${PERF_TESTS_REPO:-https://github.com/kubernetes/perf-tests.git}"
+PERF_TESTS_REF="${PERF_TESTS_REF:-v1.31.0}"
+PERF_TESTS_MODE="${PERF_TESTS_MODE:-cluster-dns}"
+PERF_TESTS_RUN_LENGTH_SECONDS="${PERF_TESTS_RUN_LENGTH_SECONDS:-60}"
+PERF_TESTS_MAX_QPS="${PERF_TESTS_MAX_QPS:-500 1000 2000}"
+
+config_error() {
+  echo "ERROR: Invalid config: $*" >&2
+  exit 2
+}
+
+validate_positive_integer() {
+  local name="$1" value="$2"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || config_error "$name must be a positive integer"
+}
+
+validate_positive_integer_list() {
+  local name="$1" value="$2" item
+  [[ -n "$value" ]] || config_error "$name must contain at least one positive integer"
+  for item in $value; do
+    validate_positive_integer "$name" "$item"
+  done
+}
+
+validate_optional_non_negative_number() {
+  local name="$1" value="$2"
+  [[ -z "$value" || "$value" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)$ ]] || config_error "$name must be a non-negative number"
+}
+
+validate_config() {
+  validate_positive_integer_list DNSPERF_QPS_STEPS "$DNSPERF_QPS_STEPS"
+  validate_positive_integer DNSPERF_DURATION_SECONDS "$DNSPERF_DURATION_SECONDS"
+  validate_positive_integer DNSPERF_CLIENTS "$DNSPERF_CLIENTS"
+  validate_positive_integer DNSPERF_THREADS "$DNSPERF_THREADS"
+  validate_positive_integer DNSPERF_STATS_INTERVAL "$DNSPERF_STATS_INTERVAL"
+  validate_positive_integer QUERY_REPEAT_COUNT "$QUERY_REPEAT_COUNT"
+  validate_optional_non_negative_number DNSPERF_MAX_LOST_PERCENT "$DNSPERF_MAX_LOST_PERCENT"
+  validate_optional_non_negative_number DNSPERF_MAX_AVG_LATENCY_SECONDS "$DNSPERF_MAX_AVG_LATENCY_SECONDS"
+  validate_positive_integer PERF_TESTS_RUN_LENGTH_SECONDS "$PERF_TESTS_RUN_LENGTH_SECONDS"
+  validate_positive_integer_list PERF_TESTS_MAX_QPS "$PERF_TESTS_MAX_QPS"
+
+  case "$INCLUDE_SERIAL_DNS_TESTS" in
+    true|false) ;;
+    *) config_error "INCLUDE_SERIAL_DNS_TESTS must be true or false" ;;
+  esac
+
+  case "$PERF_TESTS_MODE" in
+    cluster-dns|dns-ip|isolated-coredns) ;;
+    *) config_error "PERF_TESTS_MODE must be one of: cluster-dns, dns-ip, isolated-coredns" ;;
+  esac
+}
+
+validate_config
+
+export LOG_FILE="$ARTIFACT_DIR/ocp-dns-validate.log"
+export RUNTIME_ENV="$ARTIFACT_DIR/runtime.env"
+export OPENSHIFT_TESTS_BIN="$ARTIFACT_DIR/01-openshift-tests/openshift-tests"
+export KUBECONFIG
+
+mkdir -p "$ARTIFACT_DIR"
+
+# The ShellCheck source directives below provide follow-path hints for IDEs
+# and ShellCheck's external-source mode; SC1091 suppresses "can't follow"
+# warnings in environments that run without that mode.
+# shellcheck source=../lib/common.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/lib/common.sh"
+# shellcheck source=../lib/cluster.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/lib/cluster.sh"
+# shellcheck source=../lib/results.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/lib/results.sh"
+# shellcheck source=../lib/perf.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/lib/perf.sh"
+
+menu() {
+  init_dirs
+  while true; do
+    cat <<MENU
+
+OpenShift DNS Validation
+Artifact directory: $ARTIFACT_DIR
+Namespace:          $VALIDATION_NAMESPACE
+
+  1) Init/check local tools
+  2) Preflight cluster + DNS baseline
+  3) Extract release-matched openshift-tests
+  4) Discover DNS conformance tests
+  5) Run DNS conformance subset
+  6) Run one openshift-tests test by full name
+  7) Node-level DNS sweep
+  8) Generate dnsperf query file
+  9) Run direct dnsperf QPS ladder
+ 10) Run optional kubernetes/perf-tests/dns quick profile
+ 11) Generate markdown report
+ 12) Cleanup validation namespace
+ 13) Run recommended sequence
+ 14) Show artifact paths
+  q) Quit
+MENU
+    read -r -p "Select action: " choice
+    case "$choice" in
+      1) init_action ;;
+      2) preflight ;;
+      3) extract_tests ;;
+      4) discover_dns_tests ;;
+      5) run_dns_tests ;;
+      6) run_single_test ;;
+      7) node_sweep ;;
+      8) generate_queries ;;
+      9) run_dnsperf ;;
+      10) run_perf_tests ;;
+      11) report ;;
+      12) cleanup ;;
+      13) all_actions ;;
+      14) show_paths ;;
+      q|Q) break ;;
+      *) echo "Unknown choice: $choice" ;;
+    esac
+  done
+}
+
+case "$ACTION" in
+  menu) menu ;;
+  init) init_action ;;
+  preflight) preflight ;;
+  extract-tests) extract_tests ;;
+  discover-dns-tests) discover_dns_tests ;;
+  run-dns-tests) run_dns_tests ;;
+  run-single-test) run_single_test "${ACTION_ARGS[@]}" ;;
+  node-sweep) node_sweep ;;
+  generate-queries) generate_queries ;;
+  dnsperf) run_dnsperf ;;
+  perf-tests) run_perf_tests ;;
+  report) report ;;
+  cleanup) cleanup ;;
+  all) all_actions ;;
+  *) usage; exit 2 ;;
+esac

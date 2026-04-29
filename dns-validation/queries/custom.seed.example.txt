@@ -1,0 +1,11 @@
+# dnsperf query seed example
+# Format: <name> <type>
+# Copy to custom.seed.txt and adjust to your cluster/application domains.
+
+kubernetes.default.svc.cluster.local A
+openshift.default.svc.cluster.local A
+openshift-apiserver.openshift-apiserver.svc.cluster.local A
+console-openshift-console.apps.example.com A
+registry.redhat.io A
+nonexistent-service.default.svc.cluster.local A
+thisdomaindoesnotexist12345.example.com A
