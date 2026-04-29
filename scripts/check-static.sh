@@ -9,13 +9,17 @@ bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n scripts/check-static.sh
+bash -n tests/extract-tests-empty-target.sh
+
+bash tests/extract-tests-empty-target.sh
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
   dns-validation/lib/common.sh \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
-  scripts/check-static.sh
+  scripts/check-static.sh \
+  tests/extract-tests-empty-target.sh
 
 if grep -q 'DNSPERF_IMAGE=".*:latest"' dns-validation/config/validation.env.example; then
   echo "validation.env.example must not use a floating DNSPERF_IMAGE tag" >&2

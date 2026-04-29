@@ -72,9 +72,10 @@ EOF
 extract_tests() {
   init_dirs
   require_cmd oc
+  require_cmd mktemp
   read_runtime
 
-  local release_image tests_image tests_dir
+  local release_image tests_image tests_dir extract_dir
   local auth=()
   tests_dir="$ARTIFACT_DIR/01-openshift-tests"
   release_image="${RELEASE_IMAGE:-$(oc get clusterversion version -o jsonpath='{.status.desired.image}')}"
@@ -82,13 +83,16 @@ extract_tests() {
   [[ -f "$PULL_SECRET_FILE" ]] && auth=(-a "$PULL_SECRET_FILE")
 
   tests_image="$(oc adm release info --image-for=tests "${auth[@]}" "$release_image")"
-  echo "$release_image" >"$tests_dir/release-image.txt"
-  echo "$tests_image" >"$tests_dir/tests-image.txt"
   write_runtime_kv RELEASE_IMAGE "$release_image"
   write_runtime_kv TESTS_IMAGE "$tests_image"
 
-  (cd "$tests_dir" && oc image extract "$tests_image" "${auth[@]}" --path /usr/bin/openshift-tests:.) 2>&1 | tee -a "$LOG_FILE"
+  extract_dir="$(mktemp -d "$ARTIFACT_DIR/tmp/openshift-tests.XXXXXX")"
+  (cd "$extract_dir" && oc image extract "$tests_image" "${auth[@]}" --path /usr/bin/openshift-tests:.) 2>&1 | tee -a "$LOG_FILE"
+  mv "$extract_dir/openshift-tests" "$OPENSHIFT_TESTS_BIN"
+  rmdir "$extract_dir"
   chmod +x "$OPENSHIFT_TESTS_BIN"
+  echo "$release_image" >"$tests_dir/release-image.txt"
+  echo "$tests_image" >"$tests_dir/tests-image.txt"
   run_out "$tests_dir/openshift-tests-version.txt" "$OPENSHIFT_TESTS_BIN" version
 }
 
