@@ -1254,7 +1254,7 @@ Add this threshold note under the existing dnsperf configuration example:
 ```markdown
 Optional dnsperf verdict thresholds can block the verdict on loss or average latency while still keeping the per-QPS command return code gate:
 
-```bash
+```text
 DNSPERF_MAX_LOST_PERCENT="0.0"
 DNSPERF_MAX_AVG_LATENCY_SECONDS="0.005"
 ```
