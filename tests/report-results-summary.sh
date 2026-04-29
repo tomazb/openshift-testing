@@ -5,6 +5,48 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+FAKE_BIN="$TMP_DIR/bin"
+mkdir -p "$FAKE_BIN"
+
+cat >"$FAKE_BIN/oc" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+args="$*"
+
+case "$args" in
+  "-n openshift-dns get pods -o jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}")
+    echo "dns-default-a"
+    exit 0
+    ;;
+  "-n openshift-dns-operator get pods -o jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}")
+    echo "dns-operator-a"
+    exit 0
+    ;;
+  "-n openshift-dns logs dns-default-a --all-containers --tail=-1")
+    echo "dns pod log"
+    exit 0
+    ;;
+  "-n openshift-dns describe pod dns-default-a")
+    echo "dns pod describe"
+    exit 0
+    ;;
+  "-n openshift-dns-operator logs dns-operator-a --all-containers --tail=-1")
+    echo "operator pod log"
+    exit 0
+    ;;
+  "-n openshift-dns get events --sort-by=.metadata.creationTimestamp"|\
+  "-n openshift-dns-operator get events --sort-by=.metadata.creationTimestamp"|\
+  "-n dns-validation get events --sort-by=.metadata.creationTimestamp")
+    echo "events"
+    exit 0
+    ;;
+esac
+
+echo "unexpected oc call: $args" >&2
+exit 2
+EOF
+chmod +x "$FAKE_BIN/oc"
+
 ARTIFACT_DIR="$TMP_DIR/artifacts"
 mkdir -p \
   "$ARTIFACT_DIR/00-preflight" \
@@ -153,7 +195,7 @@ ARTIFACT_DIR="$ARTIFACT_DIR"
 VALIDATION_NAMESPACE="dns-validation"
 EOF
 
-bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report.out"
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report.out"
 
 REPORT="$ARTIFACT_DIR/05-report/dns-validation-report.md"
 
@@ -164,6 +206,7 @@ grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$REPOR
 grep -Fq -- "- DNS tests: selected=3, excluded=2" "$REPORT"
 grep -Fq -- "- dnsperf: 2/3 qps steps passed (failures: 500)" "$REPORT"
 grep -Fq -- "- perf-tests: rc=7" "$REPORT"
+grep -Fq -- "- Deep diagnostics: rc=0, artifacts=\`$ARTIFACT_DIR/05-report/deep-diagnostics\`" "$REPORT"
 grep -Fq "## DNS conformance details" "$REPORT"
 grep -Fq -- "- Slowest DNS tests:" "$REPORT"
 grep -Fq -- "12.3s passed \"dns service lookup\"" "$REPORT"
@@ -186,6 +229,7 @@ grep -Fq "Optional perf-tests returned rc=7" "$REPORT"
 grep -Fq "## Results summary" "$TMP_DIR/report.out"
 grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53; Network 192.0.2.53 53; Network 2001:db8::53 5353" "$TMP_DIR/report.out"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$TMP_DIR/report.out"
+grep -Fq -- "- Deep diagnostics: rc=0, artifacts=\`$ARTIFACT_DIR/05-report/deep-diagnostics\`" "$TMP_DIR/report.out"
 grep -Fq "## dnsperf detailed stats" "$TMP_DIR/report.out"
 
 cat >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt" <<'EOF'
@@ -193,7 +237,7 @@ error: failed to fetch dns upstream resolvers
 EOF
 echo "1" >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt.rc"
 
-bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report-upstream-rc.out"
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report-upstream-rc.out"
 
 grep -Fq -- "- DNS upstream resolvers: not captured (rc=1)" "$REPORT"
 grep -Fq -- "- DNS upstream resolvers: not captured (rc=1)" "$TMP_DIR/report-upstream-rc.out"

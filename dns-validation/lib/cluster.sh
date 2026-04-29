@@ -91,6 +91,70 @@ collect_lightweight_diagnostics() {
   run_out "$d/dns-upstream-resolvers.txt" oc get dns.operator/default -o 'jsonpath={range .spec.upstreamResolvers.upstreams[*]}{.type}{" "}{.address}{" "}{.port}{"\n"}{end}'
 }
 
+collect_deep_run_out() {
+  local out="$1"
+  local rc
+  shift
+
+  run_out "$out" "$@"
+  if [[ -s "$out.rc" ]]; then
+    rc="$(tr -d '[:space:]' <"$out.rc")"
+    [[ "$rc" == "0" ]]
+  else
+    return 1
+  fi
+}
+
+collect_deep_diagnostics() {
+  init_dirs
+  local d="$ARTIFACT_DIR/05-report/deep-diagnostics"
+  local rc=0
+  local pod pod_file
+  mkdir -p "$d"
+
+  log "Capturing deep DNS diagnostics."
+
+  if ! command -v oc >/dev/null 2>&1; then
+    echo "oc command not found" >"$d/deep-diagnostics-error.txt"
+    echo "1" >"$ARTIFACT_DIR/05-report/deep-diagnostics.rc"
+    warn "Deep DNS diagnostics incomplete; see $d"
+    return 0
+  fi
+
+  pod_file="$d/openshift-dns-pods.txt"
+  if collect_deep_run_out "$pod_file" oc -n openshift-dns get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
+    while IFS= read -r pod; do
+      [[ -n "$pod" ]] || continue
+      collect_deep_run_out "$d/openshift-dns-${pod}.log" oc -n openshift-dns logs "$pod" --all-containers --tail=-1 || rc=1
+      collect_deep_run_out "$d/openshift-dns-${pod}.describe.txt" oc -n openshift-dns describe pod "$pod" || rc=1
+    done <"$pod_file"
+  else
+    rc=1
+  fi
+
+  pod_file="$d/openshift-dns-operator-pods.txt"
+  if collect_deep_run_out "$pod_file" oc -n openshift-dns-operator get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
+    while IFS= read -r pod; do
+      [[ -n "$pod" ]] || continue
+      collect_deep_run_out "$d/openshift-dns-operator-${pod}.log" oc -n openshift-dns-operator logs "$pod" --all-containers --tail=-1 || rc=1
+    done <"$pod_file"
+  else
+    rc=1
+  fi
+
+  collect_deep_run_out "$d/openshift-dns-events.txt" oc -n openshift-dns get events --sort-by=.metadata.creationTimestamp || rc=1
+  collect_deep_run_out "$d/openshift-dns-operator-events.txt" oc -n openshift-dns-operator get events --sort-by=.metadata.creationTimestamp || rc=1
+  collect_deep_run_out "$d/validation-namespace-events.txt" oc -n "$VALIDATION_NAMESPACE" get events --sort-by=.metadata.creationTimestamp || rc=1
+
+  echo "$rc" >"$ARTIFACT_DIR/05-report/deep-diagnostics.rc"
+  if [[ "$rc" -eq 0 ]]; then
+    log "Deep DNS diagnostics captured: $d"
+  else
+    warn "Deep DNS diagnostics incomplete; see $d"
+  fi
+  return 0
+}
+
 extract_tests() {
   init_dirs
   require_cmd oc

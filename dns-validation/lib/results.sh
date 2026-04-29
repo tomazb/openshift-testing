@@ -256,13 +256,21 @@ results_compute_verdict() {
     results_add_blocking_reason "dnsperf failed qps steps: $failed_qps" "$dnsperf_file"
   fi
 
-  local perf_rc_file perf_rc
+  local perf_rc_file perf_rc deep_rc_file deep_rc
   perf_rc_file="$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
   perf_rc="$(results_read_artifact_rc "$perf_rc_file")"
   if [[ "$perf_rc" == "not run" ]]; then
     results_add_risk_reason "Optional perf-tests not run" "$perf_rc_file"
   elif [[ "$perf_rc" != "0" ]]; then
     results_add_risk_reason "Optional perf-tests returned rc=$perf_rc" "$perf_rc_file"
+  fi
+
+  deep_rc_file="$ARTIFACT_DIR/05-report/deep-diagnostics.rc"
+  deep_rc="$(results_read_artifact_rc "$deep_rc_file")"
+  if [[ "$deep_rc" != "0" && "$deep_rc" != "not run" ]]; then
+    if [[ -s "$report_dir/verdict-blocking-reasons.txt" || -s "$report_dir/verdict-risk-reasons.txt" ]]; then
+      results_add_risk_reason "deep diagnostics incomplete: rc=$deep_rc" "$deep_rc_file"
+    fi
   fi
 
   if [[ -s "$report_dir/verdict-blocking-reasons.txt" ]]; then
@@ -478,6 +486,17 @@ results_perf_tests_summary() {
   fi
 }
 
+results_deep_diagnostics_summary() {
+  local d="$ARTIFACT_DIR/05-report/deep-diagnostics"
+  local rc
+  rc="$(results_read_artifact_rc "$ARTIFACT_DIR/05-report/deep-diagnostics.rc")"
+  if [[ -d "$d" ]]; then
+    printf 'rc=%s, artifacts=%s%s%s\n' "$rc" '`' "$d" '`'
+  else
+    echo "not collected"
+  fi
+}
+
 render_dns_conformance_details() {
   local file="$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt"
   local passed failed skipped selected excluded slowest
@@ -585,6 +604,7 @@ render_results_summary() {
 - DNS tests: selected=$selected, excluded=$excluded
 - dnsperf: $(results_dnsperf_summary)
 - perf-tests: $(results_perf_tests_summary)
+- Deep diagnostics: $(results_deep_diagnostics_summary)
 EOF
   echo
   render_dns_conformance_details
