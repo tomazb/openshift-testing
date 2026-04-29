@@ -4,25 +4,21 @@ set -Eeuo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+test_scripts=(tests/*.sh)
+
 bash -n dns-validation/bin/ocp-dns-validate
 bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n dns-validation/lib/results.sh
 bash -n scripts/check-static.sh
-bash -n tests/discover-dns-tests-exclude.sh
-bash -n tests/deep-diagnostics-trigger.sh
-bash -n tests/extract-tests-empty-target.sh
-bash -n tests/preflight-dns-operator-gate.sh
-bash -n tests/report-results-summary.sh
-bash -n tests/results-verdict.sh
+for test_script in "${test_scripts[@]}"; do
+  bash -n "$test_script"
+done
 
-bash tests/discover-dns-tests-exclude.sh
-bash tests/deep-diagnostics-trigger.sh
-bash tests/extract-tests-empty-target.sh
-bash tests/preflight-dns-operator-gate.sh
-bash tests/report-results-summary.sh
-bash tests/results-verdict.sh
+for test_script in "${test_scripts[@]}"; do
+  bash "$test_script"
+done
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
@@ -31,12 +27,7 @@ shellcheck -x \
   dns-validation/lib/perf.sh \
   dns-validation/lib/results.sh \
   scripts/check-static.sh \
-  tests/deep-diagnostics-trigger.sh \
-  tests/discover-dns-tests-exclude.sh \
-  tests/extract-tests-empty-target.sh \
-  tests/preflight-dns-operator-gate.sh \
-  tests/report-results-summary.sh \
-  tests/results-verdict.sh
+  "${test_scripts[@]}"
 
 # shellcheck disable=SC2016
 if ! grep -Fq 'source "$PROJECT_DIR/lib/results.sh"' dns-validation/bin/ocp-dns-validate; then
