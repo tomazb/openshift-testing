@@ -244,16 +244,20 @@ results_compute_verdict() {
     results_add_risk_reason "External DNS lookup missing on $((nodes - external)) of $nodes swept nodes" "$node_file"
   fi
 
-  local dnsperf_file failed_qps dnsperf_qps_count
+  local dnsperf_file failed_qps dnsperf_qps_count threshold_failures
   dnsperf_file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
   failed_qps="$(results_dnsperf_failure_qps)"
   dnsperf_qps_count="$(results_dnsperf_qps_count)"
+  threshold_failures="$(results_dnsperf_log_threshold_failures)"
   if [[ ! -s "$dnsperf_file" ]]; then
     results_add_blocking_reason "dnsperf summary artifact missing" "$dnsperf_file"
   elif [[ "$dnsperf_qps_count" == "0" ]]; then
     results_add_blocking_reason "dnsperf summary has no qps results" "$dnsperf_file"
   elif [[ -n "$failed_qps" ]]; then
     results_add_blocking_reason "dnsperf failed qps steps: $failed_qps" "$dnsperf_file"
+  fi
+  if [[ -n "$threshold_failures" ]]; then
+    results_add_blocking_reason "dnsperf threshold failures: $threshold_failures" "$dnsperf_file"
   fi
 
   local perf_rc_file perf_rc deep_rc_file deep_rc
@@ -445,6 +449,37 @@ results_dnsperf_log_stats() {
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", sent, completed, completed_pct, lost, lost_pct, achieved, avg, min, max, stddev, codes
     }
   ' "$dnsperf_log_file"
+}
+
+results_dnsperf_log_threshold_failures() {
+  local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+  local loss_threshold="${DNSPERF_MAX_LOST_PERCENT:-}"
+  local latency_threshold="${DNSPERF_MAX_AVG_LATENCY_SECONDS:-}"
+  local failures=""
+  local qps log_path resolved stats
+  local _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes
+
+  [[ -s "$file" ]] || return 0
+  [[ -n "$loss_threshold" || -n "$latency_threshold" ]] || return 0
+
+  while IFS=$'\t' read -r qps log_path; do
+    resolved="$(results_resolve_artifact_path "$log_path" "$ARTIFACT_DIR/03-dnsperf")"
+    stats="$(results_dnsperf_log_stats "$resolved")"
+    IFS=$'\t' read -r _sent _completed _completed_pct _lost lost_pct _achieved avg _min _max _stddev _codes <<<"$stats"
+    lost_pct="${lost_pct%%%}"
+    if [[ -n "$loss_threshold" && "$lost_pct" != "unknown" ]]; then
+      if awk -v actual="$lost_pct" -v limit="$loss_threshold" 'BEGIN { exit !(actual > limit) }'; then
+        failures="${failures}${failures:+, }${qps}qps lost=${lost_pct}%"
+      fi
+    fi
+    if [[ -n "$latency_threshold" && "$avg" != "unknown" ]]; then
+      if awk -v actual="$avg" -v limit="$latency_threshold" 'BEGIN { exit !(actual > limit) }'; then
+        failures="${failures}${failures:+, }${qps}qps avg-latency=${avg}s"
+      fi
+    fi
+  done < <(awk -F '\t' 'NR > 1 { print $1 "\t" $3 }' "$file")
+
+  printf '%s\n' "$failures"
 }
 
 render_dnsperf_details() {

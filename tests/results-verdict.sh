@@ -266,3 +266,28 @@ write_common_success_artifacts "$case_dir"
 echo "7" >"$case_dir/04-perf-tests/perf-tests-run.rc"
 assert_verdict "$case_dir" "Accepted with risks"
 grep -Fq "Optional perf-tests returned rc=7" "$case_dir/05-report/verdict-risk-reasons.txt"
+
+case_dir="$TMP_DIR/dnsperf-loss-threshold"
+write_common_success_artifacts "$case_dir"
+DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null
+grep -Fxq "Accepted" "$case_dir/05-report/verdict.txt"
+
+cat >"$case_dir/03-dnsperf/dnsperf-qps-100.log" <<'EOF'
+Statistics:
+  Queries sent:         6000
+  Queries completed:    5990 (99.83%)
+  Queries lost:         10 (0.17%)
+  Response codes:       NOERROR 5990 (100.00%)
+  Queries per second:   99.833333
+  Average Latency (s):  0.000200 (min 0.000100, max 0.010000)
+  Latency StdDev (s):   0.000300
+EOF
+DNSPERF_MAX_LOST_PERCENT="0.0" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null
+grep -Fxq "Blocked" "$case_dir/05-report/verdict.txt"
+grep -Fq "dnsperf threshold failures: 100qps lost=0.17%" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/dnsperf-latency-threshold"
+write_common_success_artifacts "$case_dir"
+DNSPERF_MAX_AVG_LATENCY_SECONDS="0.000100" ARTIFACT_DIR="$case_dir" results_compute_verdict >/dev/null
+grep -Fxq "Blocked" "$case_dir/05-report/verdict.txt"
+grep -Fq "100qps avg-latency=0.000200s" "$case_dir/05-report/verdict-blocking-reasons.txt"
