@@ -26,11 +26,26 @@ case "$args" in
   "describe dns.operator/default"|\
   "describe clusteroperator/dns"|\
   "-n openshift-dns get all -o wide"|\
-  "-n openshift-dns-operator get all -o wide")
+  "-n openshift-dns-operator get all -o wide"|\
+  "-n openshift-dns get pods,daemonsets,deployments,services,endpoints -o wide"|\
+  "-n openshift-dns-operator get pods,deployments,services -o wide"|\
+  "-n openshift-dns get events --sort-by=.metadata.creationTimestamp"|\
+  "-n openshift-dns-operator get events --sort-by=.metadata.creationTimestamp"|\
+  "-n openshift-dns get endpointslices.discovery.k8s.io -o wide")
     echo "ok"
     exit 0
     ;;
 esac
+
+if [[ "$args" == "get dns.operator/default -o jsonpath={range .spec.upstreamResolvers.upstreams[*]}{.type}{\" \"}{.address}{\" \"}{.port}{\"\\n\"}{end}" ]]; then
+  echo "SystemResolvConf  53"
+  exit 0
+fi
+
+if [[ "$args" == "-n openshift-dns get pods -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,PHASE:.status.phase --no-headers" ]]; then
+  echo "dns-default-a node-a Running"
+  exit 0
+fi
 
 if [[ "${1:-}" == "get" && "${2:-}" == "dns.operator/default" && "${3:-}" == "-o" ]]; then
   case "${4:-}" in
@@ -97,3 +112,7 @@ Expected: Available=True, Progressing=False, Degraded=False
 EOF
 
 diff -u "$TMP_DIR/expected-gate.txt" "$TMP_DIR/artifacts/00-preflight/dns-operator-gate.txt"
+test -s "$TMP_DIR/artifacts/00-preflight/dns-upstream-resolvers.txt"
+grep -Fq "SystemResolvConf" "$TMP_DIR/artifacts/00-preflight/dns-upstream-resolvers.txt"
+test -s "$TMP_DIR/artifacts/00-preflight/openshift-dns-events.txt"
+test -s "$TMP_DIR/artifacts/00-preflight/coredns-pod-placement.txt"

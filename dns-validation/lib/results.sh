@@ -311,6 +311,15 @@ results_dns_operator_gate_summary() {
   echo "Available=${available:-unknown}, Progressing=${progressing:-unknown}, Degraded=${degraded:-unknown}"
 }
 
+results_dns_upstream_summary() {
+  local file="$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt"
+  if [[ -s "$file" ]]; then
+    paste -sd '; ' "$file"
+  else
+    echo "not captured"
+  fi
+}
+
 results_dnsperf_summary() {
   local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
   if [[ ! -s "$file" ]]; then
@@ -558,6 +567,7 @@ render_results_summary() {
 - Artifact directory: \`$ARTIFACT_DIR\`
 - Report: \`$report_path\`
 - DNS operator gate: $(results_dns_operator_gate_summary)
+- DNS upstream resolvers: $(results_dns_upstream_summary)
 - openshift-tests DNS: rc=$dns_rc, passed=$passed, failed=$failed, skipped=$skipped
 - DNS tests: selected=$selected, excluded=$excluded
 - dnsperf: $(results_dnsperf_summary)

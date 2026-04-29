@@ -29,6 +29,10 @@ Degraded=False
 Expected: Available=True, Progressing=False, Degraded=False
 EOF
 
+cat >"$ARTIFACT_DIR/00-preflight/dns-upstream-resolvers.txt" <<'EOF'
+SystemResolvConf  53
+EOF
+
 cat >"$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" <<'EOF'
 passed: (12.3s) "dns service lookup"
 failed: (800ms) "dns failing lookup"
@@ -153,6 +157,7 @@ REPORT="$ARTIFACT_DIR/05-report/dns-validation-report.md"
 
 grep -Fq "## Results summary" "$REPORT"
 grep -Fq -- "- DNS operator gate: Available=True, Progressing=False, Degraded=False" "$REPORT"
+grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53" "$REPORT"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$REPORT"
 grep -Fq -- "- DNS tests: selected=3, excluded=2" "$REPORT"
 grep -Fq -- "- dnsperf: 2/3 qps steps passed (failures: 500)" "$REPORT"
@@ -177,6 +182,7 @@ grep -Fq "External DNS lookup missing on 1 of 2 swept nodes" "$REPORT"
 grep -Fq "Optional perf-tests returned rc=7" "$REPORT"
 
 grep -Fq "## Results summary" "$TMP_DIR/report.out"
+grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53" "$TMP_DIR/report.out"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$TMP_DIR/report.out"
 grep -Fq "## dnsperf detailed stats" "$TMP_DIR/report.out"
 

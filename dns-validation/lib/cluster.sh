@@ -71,7 +71,24 @@ EOF
     echo "Expected: Available=True, Progressing=False, Degraded=False"
   } >"$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
 
+  collect_lightweight_diagnostics
+
   log "Detected cluster DNS IP: ${cluster_dns_ip:-unknown}; domain: ${cluster_domain:-unknown}."
+}
+
+collect_lightweight_diagnostics() {
+  init_dirs
+  require_cmd oc
+  local d="$ARTIFACT_DIR/00-preflight"
+
+  log "Capturing lightweight DNS diagnostics."
+  run_out "$d/openshift-dns-workloads.txt" oc -n openshift-dns get pods,daemonsets,deployments,services,endpoints -o wide
+  run_out "$d/openshift-dns-operator-workloads.txt" oc -n openshift-dns-operator get pods,deployments,services -o wide
+  run_out "$d/openshift-dns-events.txt" oc -n openshift-dns get events --sort-by=.metadata.creationTimestamp
+  run_out "$d/openshift-dns-operator-events.txt" oc -n openshift-dns-operator get events --sort-by=.metadata.creationTimestamp
+  run_out "$d/openshift-dns-endpointslices.txt" oc -n openshift-dns get endpointslices.discovery.k8s.io -o wide
+  run_out "$d/coredns-pod-placement.txt" oc -n openshift-dns get pods -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,PHASE:.status.phase --no-headers
+  run_out "$d/dns-upstream-resolvers.txt" oc get dns.operator/default -o 'jsonpath={range .spec.upstreamResolvers.upstreams[*]}{.type}{" "}{.address}{" "}{.port}{"\n"}{end}'
 }
 
 extract_tests() {
@@ -237,6 +254,8 @@ EOF
     oc -n "$VALIDATION_NAMESPACE" exec "$pod" -- sh -c 'nslookup "kubernetes.default.svc.$1"; nslookup "openshift.default.svc.$1" || true; nslookup registry.redhat.io || true' -- "$domain" >>"$result" 2>&1 || true
     echo >>"$result"
   done
+
+  collect_lightweight_diagnostics
 
   log "Node sweep results: $result"
 }
