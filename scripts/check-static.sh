@@ -12,10 +12,12 @@ bash -n scripts/check-static.sh
 bash -n tests/discover-dns-tests-exclude.sh
 bash -n tests/extract-tests-empty-target.sh
 bash -n tests/preflight-dns-operator-gate.sh
+bash -n tests/report-results-summary.sh
 
 bash tests/discover-dns-tests-exclude.sh
 bash tests/extract-tests-empty-target.sh
 bash tests/preflight-dns-operator-gate.sh
+bash tests/report-results-summary.sh
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
@@ -25,7 +27,8 @@ shellcheck -x \
   scripts/check-static.sh \
   tests/discover-dns-tests-exclude.sh \
   tests/extract-tests-empty-target.sh \
-  tests/preflight-dns-operator-gate.sh
+  tests/preflight-dns-operator-gate.sh \
+  tests/report-results-summary.sh
 
 if grep -q 'DNSPERF_IMAGE=".*:latest"' dns-validation/config/validation.env.example; then
   echo "validation.env.example must not use a floating DNSPERF_IMAGE tag" >&2

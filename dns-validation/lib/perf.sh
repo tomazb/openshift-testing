@@ -159,11 +159,117 @@ EOF
   [[ $rc -eq 0 ]] || warn "perf-tests rc=$rc; see $d/perf-tests-run.log"
 }
 
+results_count_file_lines() {
+  local file="$1"
+  if [[ -s "$file" ]]; then
+    wc -l <"$file" | awk '{print $1}'
+  else
+    echo 0
+  fi
+}
+
+results_count_dns_summary_status() {
+  local status="$1"
+  local file="$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt"
+  if [[ -f "$file" ]]; then
+    grep -c "^${status}:" "$file" || true
+  else
+    echo 0
+  fi
+}
+
+results_read_artifact_rc() {
+  local file="$1"
+  if [[ -s "$file" ]]; then
+    tr -d '[:space:]' <"$file"
+  else
+    echo "not run"
+  fi
+}
+
+results_dns_operator_gate_summary() {
+  local file="$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
+  local available="unknown"
+  local progressing="unknown"
+  local degraded="unknown"
+
+  if [[ -f "$file" ]]; then
+    available="$(awk -F= '$1 == "Available" {print $2}' "$file")"
+    progressing="$(awk -F= '$1 == "Progressing" {print $2}' "$file")"
+    degraded="$(awk -F= '$1 == "Degraded" {print $2}' "$file")"
+  fi
+
+  echo "Available=${available:-unknown}, Progressing=${progressing:-unknown}, Degraded=${degraded:-unknown}"
+}
+
+results_dnsperf_summary() {
+  local file="$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
+  if [[ ! -s "$file" ]]; then
+    echo "not run"
+    return
+  fi
+
+  awk -F '\t' '
+    NR > 1 {
+      total++
+      if ($2 == "0") {
+        passed++
+      } else {
+        failed_qps = failed_qps ? failed_qps ", " $1 : $1
+      }
+    }
+    END {
+      if (total == 0) {
+        print "not run"
+      } else if (failed_qps == "") {
+        printf "%d/%d qps steps passed", passed, total
+      } else {
+        printf "%d/%d qps steps passed (failures: %s)", passed, total, failed_qps
+      }
+    }
+  ' "$file"
+}
+
+results_perf_tests_summary() {
+  local file="$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
+  if [[ -s "$file" ]]; then
+    printf 'rc=%s\n' "$(tr -d '[:space:]' <"$file")"
+  else
+    echo "not run"
+  fi
+}
+
+render_results_summary() {
+  local report_path="$1"
+  local dns_rc passed failed skipped selected excluded
+
+  dns_rc="$(results_read_artifact_rc "$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc")"
+  passed="$(results_count_dns_summary_status passed)"
+  failed="$(results_count_dns_summary_status failed)"
+  skipped="$(results_count_dns_summary_status skipped)"
+  selected="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.txt")"
+  excluded="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt")"
+
+  cat <<EOF
+## Results summary
+
+- Artifact directory: \`$ARTIFACT_DIR\`
+- Report: \`$report_path\`
+- DNS operator gate: $(results_dns_operator_gate_summary)
+- openshift-tests DNS: rc=$dns_rc, passed=$passed, failed=$failed, skipped=$skipped
+- DNS tests: selected=$selected, excluded=$excluded
+- dnsperf: $(results_dnsperf_summary)
+- perf-tests: $(results_perf_tests_summary)
+EOF
+}
+
 report() {
   init_dirs
   read_runtime
 
   local f="$ARTIFACT_DIR/05-report/dns-validation-report.md"
+  local summary
+  summary="$(render_results_summary "$f")"
   cat >"$f" <<EOF
 # OpenShift DNS Validation Report
 
@@ -209,9 +315,12 @@ $(cat "$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv" 2>/dev/null || echo "Not ru
 - [ ] Accepted
 - [ ] Accepted with risks
 - [ ] Blocked
+
+$summary
 EOF
 
   log "Report written: $f"
+  printf '%s\n' "$summary" | tee -a "$LOG_FILE"
 }
 
 cleanup() {
