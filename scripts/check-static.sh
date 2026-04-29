@@ -68,6 +68,12 @@ if grep -Fq "$bad_node_sweep_command" dns-validation/lib/cluster.sh; then
   exit 1
 fi
 
+legacy_shellcheck_node_sweep_command="sh -c 'nslookup \"kubernetes.default.svc.\$1\""
+if grep -Fq "$legacy_shellcheck_node_sweep_command" dns-validation/lib/cluster.sh; then
+  echo "node sweep sh -c command must avoid ShellCheck 0.9 SC2016 on the intentional \$1 argument" >&2
+  exit 1
+fi
+
 if ! grep -Fq '````markdown' docs/superpowers/plans/2026-04-29-dns-validation-mvp-implementation.md; then
   echo "implementation plan markdown examples with nested fences must use an outer quadruple fence" >&2
   exit 1
