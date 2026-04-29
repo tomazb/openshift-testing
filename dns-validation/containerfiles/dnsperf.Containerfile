@@ -9,7 +9,7 @@
 #   For customer or regulated environments, prefer an internally approved,
 #   pinned dnsperf image and set DNSPERF_IMAGE in config/validation.env.
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.7
 
 RUN microdnf -y install bind-utils procps-ng && \
     microdnf clean all
