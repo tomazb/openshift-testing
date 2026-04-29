@@ -9,6 +9,7 @@ ARTIFACT_DIR="$TMP_DIR/artifacts"
 mkdir -p \
   "$ARTIFACT_DIR/00-preflight" \
   "$ARTIFACT_DIR/01-openshift-tests" \
+  "$ARTIFACT_DIR/02-node-sweep" \
   "$ARTIFACT_DIR/03-dnsperf" \
   "$ARTIFACT_DIR/04-perf-tests"
 
@@ -29,10 +30,10 @@ Expected: Available=True, Progressing=False, Degraded=False
 EOF
 
 cat >"$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" <<'EOF'
-passed: "dns service lookup"
-failed: "dns failing lookup"
-skipped: "dns skipped lookup"
-passed: "dns external name"
+passed: (12.3s) "dns service lookup"
+failed: (800ms) "dns failing lookup"
+skipped: (0s) "dns skipped lookup"
+passed: (2.1s) "dns external name"
 EOF
 echo "1" >"$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc"
 
@@ -47,11 +48,96 @@ cat >"$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt" <<'EOF'
 "excluded test 2"
 EOF
 
+cat >"$ARTIFACT_DIR/02-node-sweep/node-dns-sweep.txt" <<'EOF'
+### pod=dns-sweep-a node=node-a
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+Name:	kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+openshift.default.svc.cluster.local	canonical name = kubernetes.default.svc.cluster.local.
+Name:	kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+Non-authoritative answer:
+registry.redhat.io	canonical name = registry-proxy.example.test.
+Name:	registry-proxy.example.test
+Address: 192.0.2.10
+
+### pod=dns-sweep-b node=node-b
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+Name:	kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+openshift.default.svc.cluster.local	canonical name = kubernetes.default.svc.cluster.local.
+Name:	kubernetes.default.svc.cluster.local
+Address: 172.30.0.1
+
+** server can't find registry.redhat.io: NXDOMAIN
+EOF
+
+cat >"$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-100.log" <<'EOF'
+Statistics:
+
+  Queries sent:         6000
+  Queries completed:    6000 (100.00%)
+  Queries lost:         0 (0.00%)
+
+  Response codes:       NOERROR 4000 (66.67%), NXDOMAIN 2000 (33.33%)
+  Run time (s):         60.000000
+  Queries per second:   100.000000
+
+  Average Latency (s):  0.000200 (min 0.000100, max 0.010000)
+  Latency StdDev (s):   0.000300
+EOF
+
+cat >"$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-500.log" <<'EOF'
+Statistics:
+
+  Queries sent:         30000
+  Queries completed:    29900 (99.67%)
+  Queries lost:         100 (0.33%)
+
+  Response codes:       NOERROR 19934 (66.67%), NXDOMAIN 9966 (33.33%)
+  Run time (s):         60.000000
+  Queries per second:   498.333333
+
+  Average Latency (s):  0.003000 (min 0.000200, max 0.080000)
+  Latency StdDev (s):   0.004000
+EOF
+
+cat >"$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-1000.log" <<'EOF'
+Statistics:
+
+  Queries sent:         60000
+  Queries completed:    60000 (100.00%)
+  Queries lost:         0 (0.00%)
+
+  Response codes:       NOERROR 40000 (66.67%), NXDOMAIN 20000 (33.33%)
+  Run time (s):         60.000000
+  Queries per second:   1000.000000
+
+  Average Latency (s):  0.004500 (min 0.000300, max 0.090000)
+  Latency StdDev (s):   0.005000
+EOF
+
 {
   printf 'qps\trc\tlog\n'
-  printf '100\t0\tdnsperf-qps-100.log\n'
-  printf '500\t1\tdnsperf-qps-500.log\n'
-  printf '1000\t0\tdnsperf-qps-1000.log\n'
+  printf '100\t0\t%s\n' "$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-100.log"
+  printf '500\t1\t%s\n' "$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-500.log"
+  printf '1000\t0\t%s\n' "$ARTIFACT_DIR/03-dnsperf/dnsperf-qps-1000.log"
 } >"$ARTIFACT_DIR/03-dnsperf/dnsperf-summary.tsv"
 echo "7" >"$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
 
@@ -71,17 +157,30 @@ grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$REPOR
 grep -Fq -- "- DNS tests: selected=3, excluded=2" "$REPORT"
 grep -Fq -- "- dnsperf: 2/3 qps steps passed (failures: 500)" "$REPORT"
 grep -Fq -- "- perf-tests: rc=7" "$REPORT"
+grep -Fq "## DNS conformance details" "$REPORT"
+grep -Fq -- "- Slowest DNS tests:" "$REPORT"
+grep -Fq -- "12.3s passed \"dns service lookup\"" "$REPORT"
+grep -Fq "## dnsperf detailed stats" "$REPORT"
+grep -Fq "| 500 | 1 | 29900/30000 (99.67%) | 100 (0.33%) | 498.333333 | avg 0.003000s, min 0.000200s, max 0.080000s, stddev 0.004000s | NOERROR 19934 (66.67%), NXDOMAIN 9966 (33.33%) |" "$REPORT"
+grep -Fq "## Node DNS sweep stats" "$REPORT"
+grep -Fq -- "- Nodes swept: 2" "$REPORT"
+grep -Fq -- "- kubernetes.default.svc observed: 2/2" "$REPORT"
+grep -Fq -- "- openshift.default.svc observed: 2/2" "$REPORT"
+grep -Fq -- "- registry.redhat.io observed: 1/2" "$REPORT"
+grep -Fq "## DNS validation verdict" "$REPORT"
+grep -Fq -- "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." "$REPORT"
 
 grep -Fq "## Results summary" "$TMP_DIR/report.out"
 grep -Fq -- "- openshift-tests DNS: rc=1, passed=2, failed=1, skipped=1" "$TMP_DIR/report.out"
+grep -Fq "## dnsperf detailed stats" "$TMP_DIR/report.out"
 
-if [[ "$(tail -n 1 "$REPORT")" != "- perf-tests: rc=7" ]]; then
+if [[ "$(tail -n 1 "$REPORT")" != "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." ]]; then
   echo "report should end with the results summary" >&2
   tail -n 20 "$REPORT" >&2
   exit 1
 fi
 
-if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != "- perf-tests: rc=7" ]]; then
+if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != "- DNS validation: DNS tests have failures; dnsperf has qps failures: 500." ]]; then
   echo "terminal output should end with the results summary" >&2
   tail -n 20 "$TMP_DIR/report.out" >&2
   exit 1
