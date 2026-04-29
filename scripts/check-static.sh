@@ -8,6 +8,7 @@ bash -n dns-validation/bin/ocp-dns-validate
 bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
+bash -n dns-validation/lib/results.sh
 bash -n scripts/check-static.sh
 bash -n tests/discover-dns-tests-exclude.sh
 bash -n tests/extract-tests-empty-target.sh
@@ -24,11 +25,24 @@ shellcheck -x \
   dns-validation/lib/common.sh \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
+  dns-validation/lib/results.sh \
   scripts/check-static.sh \
   tests/discover-dns-tests-exclude.sh \
   tests/extract-tests-empty-target.sh \
   tests/preflight-dns-operator-gate.sh \
   tests/report-results-summary.sh
+
+# shellcheck disable=SC2016
+if ! grep -Fq 'source "$PROJECT_DIR/lib/results.sh"' dns-validation/bin/ocp-dns-validate; then
+  echo "ocp-dns-validate must source dns-validation/lib/results.sh" >&2
+  exit 1
+fi
+
+if rg -n '^(results_|render_)' dns-validation/lib/perf.sh >/dev/null; then
+  echo "result parsing/rendering helpers belong in dns-validation/lib/results.sh" >&2
+  rg -n '^(results_|render_)' dns-validation/lib/perf.sh >&2
+  exit 1
+fi
 
 if grep -q 'DNSPERF_IMAGE=".*:latest"' dns-validation/config/validation.env.example; then
   echo "validation.env.example must not use a floating DNSPERF_IMAGE tag" >&2

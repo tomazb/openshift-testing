@@ -94,6 +94,9 @@ source "$PROJECT_DIR/lib/common.sh"
 # shellcheck source=../lib/cluster.sh
 # shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/cluster.sh"
+# shellcheck source=../lib/results.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/lib/results.sh"
 # shellcheck source=../lib/perf.sh
 # shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/perf.sh"
