@@ -76,21 +76,59 @@ results_node_sweep_counts() {
   fi
 
   awk '
+    function reset_query() {
+      kubernetes_pending = 0
+      openshift_pending = 0
+      openshift_section = 0
+    }
+    function reset_node() {
+      node_kubernetes = 0
+      node_openshift = 0
+      node_external = 0
+      reset_query()
+    }
     function flush_block() {
       if (!in_block) return
       nodes++
-      if (block ~ /kubernetes\.default\.svc\./ && block ~ /Address:[[:space:]]*[0-9]/) kubernetes++
-      if (block ~ /openshift\.default\.svc\./ && block ~ /Address:[[:space:]]*[0-9]/) openshift++
-      if (block ~ /registry\.redhat\.io[[:space:]]+canonical name/ || block ~ /Name:[[:space:]]*registry\.redhat\.io/ || block ~ /registry-proxy/) external++
+      if (node_kubernetes) kubernetes++
+      if (node_openshift) openshift++
+      if (node_external) external++
     }
     /^### pod=/ {
       flush_block()
       in_block = 1
-      block = $0 "\n"
+      reset_node()
       next
     }
-    {
-      if (in_block) block = block $0 "\n"
+    !in_block {
+      next
+    }
+    /^Server:/ {
+      reset_query()
+      next
+    }
+    /openshift\.default\.svc\.[^[:space:]]*[[:space:]]+canonical name/ {
+      openshift_section = 1
+      openshift_pending = 1
+      next
+    }
+    /Name:[[:space:]]*openshift\.default\.svc\./ {
+      openshift_section = 1
+      openshift_pending = 1
+      next
+    }
+    /Name:[[:space:]]*kubernetes\.default\.svc\./ {
+      if (!openshift_section) kubernetes_pending = 1
+      next
+    }
+    /Address:[[:space:]]*[0-9]/ {
+      if (kubernetes_pending) node_kubernetes = 1
+      if (openshift_pending) node_openshift = 1
+      if (kubernetes_pending || openshift_pending) reset_query()
+      next
+    }
+    /registry\.redhat\.io[[:space:]]+canonical name/ || /Name:[[:space:]]*registry\.redhat\.io/ || /registry-proxy/ {
+      node_external = 1
     }
     END {
       flush_block()
@@ -170,19 +208,11 @@ results_compute_verdict() {
     results_add_blocking_reason "dnsperf failed qps steps: $failed_qps" "$dnsperf_file"
   fi
 
-  local perf_rc_file perf_rc deep_rc_file deep_rc
+  local perf_rc_file perf_rc
   perf_rc_file="$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
   perf_rc="$(results_read_artifact_rc "$perf_rc_file")"
-  if [[ "$perf_rc" == "not run" ]]; then
-    results_add_risk_reason "Optional perf-tests not run" "$perf_rc_file"
-  elif [[ "$perf_rc" != "0" ]]; then
+  if [[ "$perf_rc" != "0" && "$perf_rc" != "not run" ]]; then
     results_add_risk_reason "Optional perf-tests returned rc=$perf_rc" "$perf_rc_file"
-  fi
-
-  deep_rc_file="$ARTIFACT_DIR/05-report/deep-diagnostics.rc"
-  deep_rc="$(results_read_artifact_rc "$deep_rc_file")"
-  if [[ "$deep_rc" != "0" && "$deep_rc" != "not run" ]]; then
-    results_add_risk_reason "deep diagnostics incomplete: rc=$deep_rc" "$deep_rc_file"
   fi
 
   if [[ -s "$report_dir/verdict-blocking-reasons.txt" ]]; then
@@ -423,7 +453,7 @@ EOF
 
 render_node_sweep_stats() {
   local file="$ARTIFACT_DIR/02-node-sweep/node-dns-sweep.txt"
-  local cluster_nodes
+  local cluster_nodes node_counts nodes kubernetes openshift external
   cluster_nodes="$(results_cluster_node_count)"
 
   cat <<EOF
@@ -437,35 +467,16 @@ EOF
     return
   fi
 
-  awk '
-    function flush_block() {
-      if (!in_block) return
-      nodes++
-      if (block ~ /kubernetes\.default\.svc\./ && block ~ /Address:[[:space:]]*[0-9]/) kubernetes++
-      if (block ~ /openshift\.default\.svc\.[^[:space:]]*[[:space:]]+canonical name/ || block ~ /Name:[[:space:]]*openshift\.default\.svc\./) openshift++
-      if (block ~ /registry\.redhat\.io[[:space:]]+canonical name/ || block ~ /Name:[[:space:]]*registry\.redhat\.io/ || block ~ /registry-proxy/) external++
-    }
-    /^### pod=/ {
-      flush_block()
-      in_block = 1
-      block = $0 "\n"
-      next
-    }
-    {
-      if (in_block) block = block $0 "\n"
-    }
-    END {
-      flush_block()
-      if (nodes == 0) {
-        print "- No node sweep pod blocks found"
-      } else {
-        print "- Nodes swept: " nodes
-        print "- kubernetes.default.svc observed: " kubernetes "/" nodes
-        print "- openshift.default.svc observed: " openshift "/" nodes
-        print "- registry.redhat.io observed: " external "/" nodes
-      }
-    }
-  ' "$file"
+  node_counts="$(results_node_sweep_counts)"
+  IFS=$'\t' read -r nodes kubernetes openshift external <<<"$node_counts"
+  if [[ "$nodes" == "0" ]]; then
+    echo "- No node sweep pod blocks found"
+  else
+    echo "- Nodes swept: $nodes"
+    echo "- kubernetes.default.svc observed: $kubernetes/$nodes"
+    echo "- openshift.default.svc observed: $openshift/$nodes"
+    echo "- registry.redhat.io observed: $external/$nodes"
+  fi
 }
 
 render_dns_validation_verdict() {

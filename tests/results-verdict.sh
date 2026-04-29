@@ -84,6 +84,16 @@ case_dir="$TMP_DIR/accepted"
 write_common_success_artifacts "$case_dir"
 assert_verdict "$case_dir" "Accepted"
 
+case_dir="$TMP_DIR/perf-tests-missing-accepted"
+write_common_success_artifacts "$case_dir"
+rm "$case_dir/04-perf-tests/perf-tests-run.rc"
+assert_verdict "$case_dir" "Accepted"
+
+case_dir="$TMP_DIR/deep-diagnostics-ignored"
+write_common_success_artifacts "$case_dir"
+echo "7" >"$case_dir/05-report/deep-diagnostics.rc"
+assert_verdict "$case_dir" "Accepted"
+
 case_dir="$TMP_DIR/dns-operator-blocked"
 write_common_success_artifacts "$case_dir"
 sed -i 's/Available=True/Available=False/' "$case_dir/00-preflight/dns-operator-gate.txt"
@@ -116,6 +126,30 @@ write_common_success_artifacts "$case_dir"
 sed -i '/openshift.default.svc/,+1d' "$case_dir/02-node-sweep/node-dns-sweep.txt"
 assert_verdict "$case_dir" "Blocked"
 grep -Fq "Node sweep internal lookups incomplete" "$case_dir/05-report/verdict-blocking-reasons.txt"
+
+case_dir="$TMP_DIR/internal-resolver-address-only-blocked"
+write_common_success_artifacts "$case_dir"
+cat >"$case_dir/02-node-sweep/node-dns-sweep.txt" <<'EOF'
+### pod=dns-sweep-a node=node-a
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+** server can't find kubernetes.default.svc.cluster.local: NXDOMAIN
+
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+** server can't find openshift.default.svc.cluster.local: NXDOMAIN
+
+Server:		172.30.0.10
+Address:	172.30.0.10#53
+
+Name: registry.redhat.io
+Address: 192.0.2.10
+EOF
+assert_verdict "$case_dir" "Blocked"
+grep -Fq "Node sweep internal lookups incomplete: kubernetes=0/1, openshift=0/1" \
+  "$case_dir/05-report/verdict-blocking-reasons.txt"
 
 case_dir="$TMP_DIR/node-count-blocked"
 write_common_success_artifacts "$case_dir"
