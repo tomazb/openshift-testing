@@ -9,9 +9,11 @@ bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n scripts/check-static.sh
+bash -n tests/discover-dns-tests-exclude.sh
 bash -n tests/extract-tests-empty-target.sh
 bash -n tests/preflight-dns-operator-gate.sh
 
+bash tests/discover-dns-tests-exclude.sh
 bash tests/extract-tests-empty-target.sh
 bash tests/preflight-dns-operator-gate.sh
 
@@ -21,6 +23,7 @@ shellcheck -x \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
   scripts/check-static.sh \
+  tests/discover-dns-tests-exclude.sh \
   tests/extract-tests-empty-target.sh \
   tests/preflight-dns-operator-gate.sh
 

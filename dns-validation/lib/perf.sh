@@ -192,6 +192,12 @@ $(cat "$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt" 2>/dev/null || echo "No
 $(cat "$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" 2>/dev/null || echo "Not run")
 \`\`\`
 
+## openshift-tests DNS exclusions
+
+\`\`\`
+$(if [[ -s "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt" ]]; then cat "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt"; else echo "None"; fi)
+\`\`\`
+
 ## dnsperf summary
 
 \`\`\`

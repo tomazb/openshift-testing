@@ -107,7 +107,10 @@ discover_dns_tests() {
 
   local d="$ARTIFACT_DIR/01-openshift-tests"
   local raw="$ARTIFACT_DIR/01-openshift-tests/dns-tests.raw.txt"
+  local candidates="$ARTIFACT_DIR/01-openshift-tests/dns-tests.candidates.txt"
+  local excluded="$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt"
   : >"$raw"
+  : >"$excluded"
 
   set +e
   "$OPENSHIFT_TESTS_BIN" run openshift/conformance/parallel --dry-run 2>"$d/dry-run-parallel.stderr.log" | grep -Ei "$DNS_TEST_REGEX" >>"$raw"
@@ -118,9 +121,25 @@ discover_dns_tests() {
   if [[ "$INCLUDE_SERIAL_DNS_TESTS" == true ]]; then
     cat "$d/dns-serial-candidates.txt" >>"$raw"
   fi
-  sort -u "$raw" >"$d/dns-tests.txt"
+  sort -u "$raw" >"$candidates"
+  if [[ -n "$DNS_TEST_EXCLUDE_REGEX" ]]; then
+    local exclude_rc filter_rc
+    set +e
+    grep -E "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$excluded"
+    exclude_rc=$?
+    grep -Ev "$DNS_TEST_EXCLUDE_REGEX" "$candidates" >"$d/dns-tests.txt"
+    filter_rc=$?
+    set -e
+    [[ $exclude_rc -eq 0 || $exclude_rc -eq 1 ]] || fail "Invalid DNS_TEST_EXCLUDE_REGEX='$DNS_TEST_EXCLUDE_REGEX'."
+    [[ $filter_rc -eq 0 || $filter_rc -eq 1 ]] || fail "Invalid DNS_TEST_EXCLUDE_REGEX='$DNS_TEST_EXCLUDE_REGEX'."
+  else
+    cp "$candidates" "$d/dns-tests.txt"
+  fi
   if [[ ! -s "$d/dns-tests.txt" ]]; then
     fail "DNS test discovery produced no matches. Check $d/dry-run-*.stderr.log and DNS_TEST_REGEX='$DNS_TEST_REGEX'."
+  fi
+  if [[ -s "$excluded" ]]; then
+    log "Excluded $(wc -l <"$excluded" | awk '{print $1}') DNS tests. Review: $excluded"
   fi
   log "Discovered $(wc -l <"$d/dns-tests.txt" | awk '{print $1}') DNS tests. Review: $d/dns-tests.txt"
 }
