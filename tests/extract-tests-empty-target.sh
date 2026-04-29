@@ -7,6 +7,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 FAKE_BIN="$TMP_DIR/bin"
 mkdir -p "$FAKE_BIN"
+mkdir -p "$TMP_DIR/home/.kube"
+: >"$TMP_DIR/home/.kube/config"
 
 cat >"$FAKE_BIN/oc" <<'EOF'
 #!/usr/bin/env bash
@@ -27,6 +29,11 @@ if [[ "${1:-}" == "image" && "${2:-}" == "extract" ]]; then
 #!/usr/bin/env bash
 set -Eeuo pipefail
 if [[ "${1:-}" == "version" ]]; then
+  expected_kubeconfig="$HOME/.kube/config"
+  if [[ "${KUBECONFIG:-}" != "$expected_kubeconfig" ]]; then
+    echo "KUBECONFIG not exported to openshift-tests: ${KUBECONFIG:-<unset>}" >&2
+    exit 3
+  fi
   echo "openshift-tests fake"
 else
   echo "unexpected openshift-tests call: $*" >&2
@@ -54,8 +61,10 @@ if [[ "${TRACE_UNDER_TEST:-false}" == "true" ]]; then
   VALIDATOR_BASH=(bash -x)
 fi
 
-PATH="$FAKE_BIN:$PATH" "${VALIDATOR_BASH[@]}" "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" extract-tests
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  "${VALIDATOR_BASH[@]}" "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" extract-tests
 
 test -x "$TMP_DIR/artifacts/01-openshift-tests/openshift-tests"
+grep -Fxq "0" "$TMP_DIR/artifacts/01-openshift-tests/openshift-tests-version.txt.rc"
 grep -Fxq "quay.io/openshift-release-dev/ocp-release:test" "$TMP_DIR/artifacts/01-openshift-tests/release-image.txt"
 grep -Fxq "quay.io/openshift-release-dev/ocp-tests:test" "$TMP_DIR/artifacts/01-openshift-tests/tests-image.txt"

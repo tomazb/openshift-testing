@@ -59,10 +59,15 @@ RELEASE_IMAGE=$release_image
 NETWORK_TYPE=$network_type
 EOF
 
+  local dns_available dns_progressing dns_degraded
+  dns_available="$(oc get clusteroperator/dns -o 'jsonpath={.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)"
+  dns_progressing="$(oc get clusteroperator/dns -o 'jsonpath={.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null || true)"
+  dns_degraded="$(oc get clusteroperator/dns -o 'jsonpath={.status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null || true)"
+
   {
-    echo "Available=$(oc get clusteroperator/dns -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null || true)"
-    echo "Progressing=$(oc get clusteroperator/dns -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null || true)"
-    echo "Degraded=$(oc get clusteroperator/dns -o jsonpath='{.status.conditions[?(@.type==\"Degraded\")].status}' 2>/dev/null || true)"
+    echo "Available=$dns_available"
+    echo "Progressing=$dns_progressing"
+    echo "Degraded=$dns_degraded"
     echo "Expected: Available=True, Progressing=False, Degraded=False"
   } >"$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt"
 

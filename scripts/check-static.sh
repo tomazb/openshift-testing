@@ -10,8 +10,10 @@ bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n scripts/check-static.sh
 bash -n tests/extract-tests-empty-target.sh
+bash -n tests/preflight-dns-operator-gate.sh
 
 bash tests/extract-tests-empty-target.sh
+bash tests/preflight-dns-operator-gate.sh
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
@@ -19,10 +21,16 @@ shellcheck -x \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
   scripts/check-static.sh \
-  tests/extract-tests-empty-target.sh
+  tests/extract-tests-empty-target.sh \
+  tests/preflight-dns-operator-gate.sh
 
 if grep -q 'DNSPERF_IMAGE=".*:latest"' dns-validation/config/validation.env.example; then
   echo "validation.env.example must not use a floating DNSPERF_IMAGE tag" >&2
+  exit 1
+fi
+
+if grep -q 'DNSPERF_IMAGE="docker.io/guessi/dnsperf:2.14.0"' dns-validation/config/validation.env.example; then
+  echo "validation.env.example must not use the unavailable docker.io/guessi/dnsperf:2.14.0 tag" >&2
   exit 1
 fi
 
