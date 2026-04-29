@@ -82,6 +82,9 @@ export OPENSHIFT_TESTS_BIN="$ARTIFACT_DIR/01-openshift-tests/openshift-tests"
 
 mkdir -p "$ARTIFACT_DIR"
 
+# shellcheck source= provides the follow-path hint for IDEs and shellcheck -x;
+# SC1091 suppresses the "can't follow" warning in environments that run shellcheck
+# without -x (e.g. standalone CI lint). Both are needed for full coverage.
 # shellcheck source=../lib/common.sh
 # shellcheck disable=SC1091
 source "$PROJECT_DIR/lib/common.sh"
