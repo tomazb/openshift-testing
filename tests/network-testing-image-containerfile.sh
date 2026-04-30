@@ -11,21 +11,27 @@ grep -Eq '^[[:space:]]+unzip[[:space:]]+\\$' "$CONTAINERFILE"
 for package in \
   bash-completion \
   bind-utils \
-  whois \
-  netperf \
-  qperf \
   httpd-tools \
   jq \
   nmap \
-  wireshark-cli \
-  ethtool \
-  s3fs-fuse \
-  fio; do
+  ethtool; do
   if ! grep -Eq "^[[:space:]]+${package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
     echo "missing expected package in Containerfile: $package" >&2
     exit 1
   fi
 done
+
+for deferred_package in whois netperf qperf wireshark-cli s3fs-fuse fio; do
+  if grep -Eq "^[[:space:]]+${deferred_package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
+    echo "deferred package must not be installed from UBI package list: $deferred_package" >&2
+    exit 1
+  fi
+done
+
+if grep -Eq '^[[:space:]]+curl[[:space:]]+\\$' "$CONTAINERFILE"; then
+  echo "Containerfile must rely on curl-minimal from the UBI base image instead of installing curl" >&2
+  exit 1
+fi
 
 grep -Fxq "ARG OPENSHIFT_CLIENT_VERSION=4.19.12" "$CONTAINERFILE"
 grep -Fxq "ARG STEP_CLI_VERSION=0.30.2" "$CONTAINERFILE"
@@ -49,6 +55,8 @@ fi
 
 grep -Fq 'SHA256SUMS' "$CONTAINERFILE"
 grep -Fq 'sha256sum -c --ignore-missing' "$CONTAINERFILE"
+grep -Fq 'awk -v file="${YQ_TARBALL}"' "$CONTAINERFILE"
+grep -Fq 'test -s yq.sha256' "$CONTAINERFILE"
 # shellcheck disable=SC2016
 grep -Fq 'case "${TARGETARCH:-$(uname -m)}" in' "$CONTAINERFILE"
 grep -Fq 'Unsupported architecture' "$CONTAINERFILE"

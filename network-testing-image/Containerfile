@@ -9,6 +9,9 @@ ARG STEP_CLI_VERSION=0.30.2
 ARG YQ_VERSION=v4.53.2
 ARG TARGETARCH
 
+# whois, netperf, qperf, wireshark-cli/tshark, s3fs-fuse, and fio are deferred
+# because they are unavailable in configured UBI9 repositories and this image
+# avoids enabling broad third-party repositories.
 RUN dnf install -y \
     bash-completion \
     tcpdump \
@@ -17,7 +20,6 @@ RUN dnf install -y \
     mtr \
     iperf3 \
     rsync \
-    curl \
     wget \
     unzip \
     tar \
@@ -25,16 +27,10 @@ RUN dnf install -y \
     lvm2 \
     sg3_utils \
     bind-utils \
-    whois \
-    netperf \
-    qperf \
     httpd-tools \
     jq \
     nmap \
-    wireshark-cli \
     ethtool \
-    s3fs-fuse \
-    fio \
     && dnf clean all
 
 RUN set -eux; \
@@ -96,8 +92,9 @@ RUN set -eux; \
     YQ_BASE_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}"; \
     curl -fsSLO "${YQ_BASE_URL}/${YQ_TARBALL}"; \
     curl -fsSLO "${YQ_BASE_URL}/checksums"; \
-    grep "  ${YQ_TARBALL}$" checksums > yq.sha256; \
-    sha256sum -c --ignore-missing yq.sha256; \
+    awk -v file="${YQ_TARBALL}" '$1 == file { print $19 "  " file }' checksums > yq.sha256; \
+    test -s yq.sha256; \
+    sha256sum -c yq.sha256; \
     tar -xzf "${YQ_TARBALL}" "${YQ_BINARY}"; \
     install -m 0755 "${YQ_BINARY}" /usr/local/bin/yq; \
     rm -f "${YQ_TARBALL}" checksums yq.sha256 "${YQ_BINARY}"
