@@ -37,10 +37,10 @@ grep -Fxq "ARG OPENSHIFT_CLIENT_VERSION=4.19.12" "$CONTAINERFILE"
 grep -Fxq "ARG STEP_CLI_VERSION=0.30.2" "$CONTAINERFILE"
 grep -Fxq "ARG YQ_VERSION=v4.53.2" "$CONTAINERFILE"
 
-grep -Fq 'openshift-client-linux-${OC_ARCH}-rhel9-${OPENSHIFT_CLIENT_VERSION}.tar.gz' "$CONTAINERFILE"
-grep -Fq 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OPENSHIFT_CLIENT_VERSION}' "$CONTAINERFILE"
-grep -Fq 'https://github.com/smallstep/cli/releases/download/v${STEP_CLI_VERSION}' "$CONTAINERFILE"
-grep -Fq 'https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}' "$CONTAINERFILE"
+grep -Fq "openshift-client-linux-\${OC_ARCH}-rhel9-\${OPENSHIFT_CLIENT_VERSION}.tar.gz" "$CONTAINERFILE"
+grep -Fq "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/\${OPENSHIFT_CLIENT_VERSION}" "$CONTAINERFILE"
+grep -Fq "https://github.com/smallstep/cli/releases/download/v\${STEP_CLI_VERSION}" "$CONTAINERFILE"
+grep -Fq "https://github.com/mikefarah/yq/releases/download/\${YQ_VERSION}" "$CONTAINERFILE"
 
 for completion in oc kubectl rclone step yq; do
   grep -Fq "/etc/bash_completion.d/$completion" "$CONTAINERFILE"
@@ -55,7 +55,7 @@ fi
 
 grep -Fq 'SHA256SUMS' "$CONTAINERFILE"
 grep -Fq 'sha256sum -c --ignore-missing' "$CONTAINERFILE"
-grep -Fq 'awk -v file="${YQ_TARBALL}"' "$CONTAINERFILE"
+grep -Fq "awk -v file=\"\${YQ_TARBALL}\"" "$CONTAINERFILE"
 grep -Fq 'test -s yq.sha256' "$CONTAINERFILE"
 # shellcheck disable=SC2016
 grep -Fq 'case "${TARGETARCH:-$(uname -m)}" in' "$CONTAINERFILE"
