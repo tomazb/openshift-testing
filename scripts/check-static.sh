@@ -12,6 +12,9 @@ bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n dns-validation/lib/results.sh
 bash -n scripts/check-static.sh
+for profile_file in dns-validation/config/profiles/*.env; do
+  bash -n "$profile_file"
+done
 for test_script in "${test_scripts[@]}"; do
   bash -n "$test_script"
 done
