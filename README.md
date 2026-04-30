@@ -6,7 +6,7 @@ Automation and runbooks for validating OpenShift clusters after build or during 
 
 ### Network testing image
 
-The `network-testing-image/` directory defines a UBI9-based troubleshooting image with network and storage test tools. GitHub Actions builds and smoke-tests it on pull requests, then publishes it to GitHub Container Registry after changes land on `main`.
+The `network-testing-image/` directory defines a UBI9-based troubleshooting image with OpenShift and Kubernetes clients, bash completion, DNS tools, packet and route inspection tools, throughput benchmarks, transfer utilities, JSON/YAML helpers, TLS and certificate tooling, and storage device tooling. GitHub Actions builds and smoke-tests it on pull requests, then publishes it to GitHub Container Registry after changes land on `main`.
 
 Pull the latest published image with:
 
@@ -15,6 +15,10 @@ podman pull ghcr.io/tomazb/openshift-testing/network-testing-image:latest
 ```
 
 Published tags include `latest`, `main`, `sha-<commit>`, and `network-testing-image-v*` release tags.
+
+Some tools need extra pod permissions to be useful. Packet capture and low-level interface inspection may require capabilities, device access, privileged security context settings, or cluster policy changes outside the image itself.
+
+Tools that are not available from the configured UBI9 repositories are intentionally deferred rather than added through broad third-party repositories. Deferred tools currently include `whois`, `netperf`, `qperf`, `tshark`, `s3fs`, and `fio`.
 
 ### DNS validation
 
