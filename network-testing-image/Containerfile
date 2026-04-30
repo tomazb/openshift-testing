@@ -1,4 +1,7 @@
-FROM registry.access.redhat.com/ubi9/ubi:latest
+FROM registry.access.redhat.com/ubi9/ubi:9.7
+
+ARG RCLONE_VERSION=v1.73.5
+ARG TARGETARCH
 
 RUN dnf install -y \
     tcpdump \
@@ -8,21 +11,23 @@ RUN dnf install -y \
     rsync \
     curl \
     wget \
+    unzip \
     && dnf clean all
 
-RUN ARCH=$(uname -m) && \
-    if [ "${ARCH}" = "x86_64" ]; then \
-        RCLONE_ARCH="amd64"; \
-    elif [ "${ARCH}" = "aarch64" ]; then \
-        RCLONE_ARCH="arm64"; \
-    else \
-        RCLONE_ARCH="${ARCH}"; \
-    fi && \
-    curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${RCLONE_ARCH}.zip" -o /tmp/rclone.zip && \
-    cd /tmp && \
-    unzip rclone.zip && \
-    cp rclone-*-linux-*/rclone /usr/local/bin/rclone && \
+RUN set -eux; \
+    case "${TARGETARCH:-$(uname -m)}" in \
+        amd64|x86_64) RCLONE_ARCH="amd64" ;; \
+        arm64|aarch64) RCLONE_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH:-$(uname -m)}" >&2; exit 1 ;; \
+    esac; \
+    RCLONE_ZIP="rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip"; \
+    curl -fsSLO "https://downloads.rclone.org/${RCLONE_VERSION}/${RCLONE_ZIP}"; \
+    curl -fsSLO "https://downloads.rclone.org/${RCLONE_VERSION}/SHA256SUMS"; \
+    grep "  ${RCLONE_ZIP}$" SHA256SUMS > rclone.sha256; \
+    sha256sum -c --ignore-missing rclone.sha256; \
+    unzip -q "${RCLONE_ZIP}"; \
+    cp "rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}/rclone" /usr/local/bin/rclone; \
     chmod 755 /usr/local/bin/rclone && \
-    rm -rf /tmp/rclone*
+    rm -rf "${RCLONE_ZIP}" SHA256SUMS rclone.sha256 "rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}"
 
 CMD ["/bin/bash"]
