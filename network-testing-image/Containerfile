@@ -1,17 +1,22 @@
 FROM registry.access.redhat.com/ubi9/ubi:9.7
 
+LABEL org.opencontainers.image.source="https://github.com/tomazb/openshift-testing" \
+      org.opencontainers.image.description="OpenShift network and storage testing helper image"
+
 ARG RCLONE_VERSION=v1.73.5
 ARG TARGETARCH
 
 RUN dnf install -y \
     tcpdump \
-    traceroute \
+    iproute \
+    iputils \
+    mtr \
     iperf3 \
-    fio \
     rsync \
-    curl \
     wget \
     unzip \
+    lvm2 \
+    sg3_utils \
     && dnf clean all
 
 RUN set -eux; \

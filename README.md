@@ -4,6 +4,18 @@ Automation and runbooks for validating OpenShift clusters after build or during 
 
 ## Available validation packs
 
+### Network testing image
+
+The `network-testing-image/` directory defines a UBI9-based troubleshooting image with network and storage test tools. GitHub Actions builds and smoke-tests it on pull requests, then publishes it to GitHub Container Registry after changes land on `main`.
+
+Pull the latest published image with:
+
+```bash
+podman pull ghcr.io/tomazb/openshift-testing/network-testing-image:latest
+```
+
+Published tags include `latest`, `main`, `sha-<commit>`, and `network-testing-image-v*` release tags.
+
 ### DNS validation
 
 The `dns-validation/` directory contains a text-fronted automation wrapper for DNS-focused post-install validation:
