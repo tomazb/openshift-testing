@@ -1,3 +1,28 @@
+FROM registry.access.redhat.com/ubi9/ubi:9.7 AS fio-builder
+
+ARG FIO_VERSION=3.42
+ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0
+
+RUN dnf install -y \
+    gcc \
+    make \
+    zlib-devel \
+    tar \
+    gzip \
+    && dnf clean all
+
+RUN set -eux; \
+    FIO_TARBALL="fio-${FIO_VERSION}.tar.gz"; \
+    curl -fsSLo "${FIO_TARBALL}" "https://brick.kernel.dk/snaps/${FIO_TARBALL}"; \
+    echo "${FIO_SHA256}  ${FIO_TARBALL}" | sha256sum -c -; \
+    mkdir -p /tmp/fio-src; \
+    tar -xzf "${FIO_TARBALL}" -C /tmp/fio-src --strip-components=1; \
+    cd /tmp/fio-src; \
+    ./configure --prefix=/usr/local --disable-native; \
+    make -j"$(nproc)"; \
+    make install DESTDIR=/tmp/fio-out; \
+    /tmp/fio-out/usr/local/bin/fio --version | grep -F "fio-${FIO_VERSION}"
+
 FROM registry.access.redhat.com/ubi9/ubi:9.7
 
 LABEL org.opencontainers.image.source="https://github.com/tomazb/openshift-testing" \
@@ -7,11 +32,11 @@ ARG RCLONE_VERSION=v1.73.5
 ARG OPENSHIFT_CLIENT_VERSION=4.19.12
 ARG STEP_CLI_VERSION=0.30.2
 ARG YQ_VERSION=v4.53.2
+ARG EPEL_RELEASE_URL=https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 ARG TARGETARCH
 
-# whois, netperf, qperf, wireshark-cli/tshark, s3fs-fuse, and fio are deferred
-# because they are unavailable in configured UBI9 repositories and this image
-# avoids enabling broad third-party repositories.
+# whois and wireshark-cli/tshark remain deferred because they are unavailable
+# in configured UBI9 and EPEL9 repositories.
 RUN dnf install -y \
     bash-completion \
     tcpdump \
@@ -32,6 +57,15 @@ RUN dnf install -y \
     nmap \
     ethtool \
     && dnf clean all
+
+RUN dnf install -y "${EPEL_RELEASE_URL}" \
+    && dnf install -y \
+    netperf \
+    qperf \
+    s3fs-fuse \
+    && dnf clean all
+
+COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio
 
 RUN set -eux; \
     case "${TARGETARCH:-$(uname -m)}" in \

@@ -43,10 +43,10 @@ jobs:
       - name: Smoke test image
         run: |
           docker run --rm network-testing-image:test bash -euxo pipefail -c '
-            for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping; do
+            for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping netperf qperf s3fs fio; do
               command -v "$cmd"
             done
-            for unavailable_cmd in whois netperf qperf tshark s3fs fio; do
+            for unavailable_cmd in whois tshark; do
               if command -v "$unavailable_cmd"; then
                 echo "deferred tool unexpectedly installed: $unavailable_cmd" >&2
                 exit 1
@@ -61,6 +61,8 @@ jobs:
             kubectl version --client=true
             step version | grep -F "0.30.2"
             yq --version | grep -F "v4.53.2"
+            fio --version | grep -F "fio-3.42"
+            fio --name=smoke --filename=/tmp/fio-smoke --size=4m --rw=readwrite --bs=4k --iodepth=1 --numjobs=1 --runtime=1 --time_based --group_reporting
           '
 
       - name: Log in to GitHub Container Registry

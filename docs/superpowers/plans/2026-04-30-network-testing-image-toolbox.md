@@ -6,6 +6,8 @@
 
 **Architecture:** Keep the single `network-testing-image/Containerfile` as the build contract. Use UBI/RHEL packages for repository-provided tools, keep external binaries pinned and checksum-verified, and extend the existing GitHub Actions smoke test to prove command availability, version pins, and completion files.
 
+**Follow-up sourcing update, 2026-05-01:** EPEL9 is approved for this image. Verification against the actual UBI9 build environment showed EPEL9 provides `netperf`, `qperf`, and `s3fs-fuse`, but not `fio`, `whois`, or `wireshark-cli`/`tshark`. The implementation should therefore install the available EPEL packages, source-build `fio` from the official release tarball with a pinned SHA-256, and continue deferring `whois` and `tshark`.
+
 **Tech Stack:** UBI9, Bash, Docker/Buildx, GitHub Actions, shell-based static tests.
 
 ---
@@ -26,8 +28,9 @@ Use these pins for the first implementation pass:
 - `OPENSHIFT_CLIENT_VERSION=4.19.12`, using the official OpenShift client mirror archive and `sha256sum.txt`.
 - `STEP_CLI_VERSION=0.30.2`, using the official smallstep release and `checksums.txt`.
 - `YQ_VERSION=v4.53.2`, using the official mikefarah/yq release and `checksums`.
+- `FIO_VERSION=3.42`, using the official fio release tarball from `https://brick.kernel.dk/snaps/` and a pinned SHA-256.
 
-Do not add EPEL or other broad third-party repositories in this implementation. If a requested package is unavailable from the configured UBI repositories, stop and use `superpowers:systematic-debugging` to confirm the missing package before changing scope.
+Use EPEL only for requested tools verified to be available in EPEL9 on UBI9. If a requested package is unavailable from the configured UBI and EPEL repositories, stop and use `superpowers:systematic-debugging` to confirm the missing package before changing scope.
 
 ### Task 1: Add Failing Static Tests
 
@@ -43,16 +46,13 @@ Add this block after the existing `grep -Eq '^[[:space:]]+unzip[[:space:]]+\\$' 
 for package in \
   bash-completion \
   bind-utils \
-  whois \
-  netperf \
-  qperf \
   httpd-tools \
   jq \
   nmap \
-  wireshark-cli \
   ethtool \
-  s3fs-fuse \
-  fio; do
+  netperf \
+  qperf \
+  s3fs-fuse; do
   if ! grep -Eq "^[[:space:]]+${package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
     echo "missing expected package in Containerfile: $package" >&2
     exit 1
@@ -62,11 +62,14 @@ done
 grep -Fxq "ARG OPENSHIFT_CLIENT_VERSION=4.19.12" "$CONTAINERFILE"
 grep -Fxq "ARG STEP_CLI_VERSION=0.30.2" "$CONTAINERFILE"
 grep -Fxq "ARG YQ_VERSION=v4.53.2" "$CONTAINERFILE"
+grep -Fxq "ARG FIO_VERSION=3.42" "$CONTAINERFILE"
+grep -Fxq "ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0" "$CONTAINERFILE"
 
 grep -Fq 'openshift-client-linux-${OC_ARCH}-rhel9-${OPENSHIFT_CLIENT_VERSION}.tar.gz' "$CONTAINERFILE"
 grep -Fq 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OPENSHIFT_CLIENT_VERSION}' "$CONTAINERFILE"
 grep -Fq 'https://github.com/smallstep/cli/releases/download/v${STEP_CLI_VERSION}' "$CONTAINERFILE"
 grep -Fq 'https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}' "$CONTAINERFILE"
+grep -Fq 'https://brick.kernel.dk/snaps/${FIO_TARBALL}' "$CONTAINERFILE"
 
 for completion in oc kubectl rclone step yq; do
   grep -Fq "/etc/bash_completion.d/$completion" "$CONTAINERFILE"
@@ -84,7 +87,8 @@ grep -Fq "for cmd in tcpdump ip ss ping tracepath mtr iperf3 rsync curl wget unz
 with:
 
 ```bash
-grep -Fq "for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl whois netperf qperf ab step jq yq nmap tshark ethtool arping s3fs fio; do" "$WORKFLOW"
+grep -Fq "for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping netperf qperf s3fs fio; do" "$WORKFLOW"
+grep -Fq 'for unavailable_cmd in whois tshark; do' "$WORKFLOW"
 grep -Fq 'for completion in oc kubectl rclone step yq; do' "$WORKFLOW"
 grep -Fq 'test -s "/etc/bash_completion.d/$completion"' "$WORKFLOW"
 grep -Fq 'oc version --client' "$WORKFLOW"
@@ -141,7 +145,6 @@ RUN dnf install -y \
     mtr \
     iperf3 \
     rsync \
-    curl \
     wget \
     unzip \
     tar \
@@ -149,16 +152,13 @@ RUN dnf install -y \
     lvm2 \
     sg3_utils \
     bind-utils \
-    whois \
     netperf \
     qperf \
     httpd-tools \
     jq \
     nmap \
-    wireshark-cli \
     ethtool \
     s3fs-fuse \
-    fio \
     && dnf clean all
 
 RUN set -eux; \
@@ -277,8 +277,14 @@ In `.github/workflows/network-testing-image.yml`, replace the `Smoke test image`
 
 ```yaml
           docker run --rm network-testing-image:test bash -euxo pipefail -c '
-            for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl whois netperf qperf ab step jq yq nmap tshark ethtool arping s3fs fio; do
+            for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping netperf qperf s3fs fio; do
               command -v "$cmd"
+            done
+            for unavailable_cmd in whois tshark; do
+              if command -v "$unavailable_cmd"; then
+                echo "deferred tool unexpectedly installed: $unavailable_cmd" >&2
+                exit 1
+              fi
             done
             for completion in oc kubectl rclone step yq; do
               test -s "/etc/bash_completion.d/$completion"
@@ -289,6 +295,8 @@ In `.github/workflows/network-testing-image.yml`, replace the `Smoke test image`
             kubectl version --client=true
             step version | grep -F "0.30.2"
             yq --version | grep -F "v4.53.2"
+            fio --version | grep -F "fio-3.42"
+            fio --name=smoke --filename=/tmp/fio-smoke --size=4m --rw=readwrite --bs=4k --iodepth=1 --numjobs=1 --runtime=1 --time_based --group_reporting
           '
 ```
 
@@ -389,8 +397,14 @@ Run:
 
 ```bash
 docker run --rm network-testing-image:toolbox-test bash -euxo pipefail -c '
-  for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl whois netperf qperf ab step jq yq nmap tshark ethtool arping s3fs fio; do
+  for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping netperf qperf s3fs fio; do
     command -v "$cmd"
+  done
+  for unavailable_cmd in whois tshark; do
+    if command -v "$unavailable_cmd"; then
+      echo "deferred tool unexpectedly installed: $unavailable_cmd" >&2
+      exit 1
+    fi
   done
   for completion in oc kubectl rclone step yq; do
     test -s "/etc/bash_completion.d/$completion"
@@ -401,6 +415,8 @@ docker run --rm network-testing-image:toolbox-test bash -euxo pipefail -c '
   kubectl version --client=true
   step version | grep -F "0.30.2"
   yq --version | grep -F "v4.53.2"
+  fio --version | grep -F "fio-3.42"
+  fio --name=smoke --filename=/tmp/fio-smoke --size=4m --rw=readwrite --bs=4k --iodepth=1 --numjobs=1 --runtime=1 --time_based --group_reporting
 '
 ```
 

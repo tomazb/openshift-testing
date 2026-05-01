@@ -30,11 +30,11 @@ The final image should remain usable from an interactive `bash` session in a tro
 
 This change does not create a custom troubleshooting entrypoint, wrapper CLI, or operator. It should not change the image publishing flow beyond extending smoke tests for the added capabilities.
 
-This change should not add unpinned external binaries. If a requested tool cannot be installed from the configured UBI/RHEL repositories or through a pinned, checksum-verified upstream artifact, it should be deferred rather than added through a weak supply-chain path.
+This change should not add unpinned external binaries. If a requested tool cannot be installed from the configured UBI/RHEL repositories, the approved EPEL9 repository, or through a pinned, checksum-verified upstream artifact, it should be deferred rather than added through a weak supply-chain path.
 
 ## Package Sourcing
 
-Prefer packages from UBI/RHEL repositories whenever available. Repository packages should be installed in the existing `dnf install` layer and covered by command-presence smoke tests.
+Prefer packages from UBI/RHEL repositories whenever available. EPEL9 is approved for packages that are not available from UBI/RHEL and install cleanly in the actual UBI9 build environment. Repository packages should be covered by command-presence smoke tests.
 
 External downloads are acceptable only when all of these are true:
 
@@ -44,9 +44,9 @@ External downloads are acceptable only when all of these are true:
 - The tool works for both `linux/amd64` and `linux/arm64`, or the unsupported architecture is rejected clearly.
 - The smoke test verifies the installed version.
 
-The existing pinned `rclone` install is the local pattern for external binaries. `oc`, `kubectl`, `step-cli`, and `yq` may need the same treatment depending on package availability.
+The existing pinned `rclone` install is the local pattern for external binaries. `oc`, `kubectl`, `step-cli`, `yq`, and `fio` use the same treatment when package repositories do not provide an acceptable package.
 
-`netperf`, `qperf`, `s3fs`, and `tshark` should be added from packages if available in the configured repositories. If they are not available without enabling broader repositories, record them as deferred with the reason.
+Implementation discovery found that EPEL9 provides `netperf`, `qperf`, and `s3fs-fuse`, but not `fio`, `whois`, or `wireshark-cli`/`tshark`. Add the available EPEL packages, build `fio` from the official fio source tarball with a pinned SHA-256, and record `whois` and `tshark` as deferred.
 
 ## Completion Support
 
@@ -69,19 +69,19 @@ Add `oc` and `kubectl` so the same pod can inspect OpenShift and Kubernetes reso
 
 ### DNS, HTTP, and TLS
 
-Add `bind-utils`, `whois`, `httpd-tools` for `ab`, and `step-cli`. These cover DNS queries, registration lookups, HTTP load checks, and certificate/TLS inspection.
+Add `bind-utils`, `httpd-tools` for `ab`, and `step-cli`. These cover DNS queries, HTTP load checks, and certificate/TLS inspection. Defer `whois` because it is not available from the configured UBI9 or EPEL9 repositories.
 
 ### Network Diagnostics
 
-Keep existing route, ping, trace, `mtr`, `tcpdump`, and `iperf3` tools. Add `nmap`, `tshark`, `ethtool`, `arping`, `netperf`, and `qperf` when available through acceptable sources.
+Keep existing route, ping, trace, `mtr`, `tcpdump`, and `iperf3` tools. Add `nmap`, `ethtool`, `arping`, plus EPEL-provided `netperf` and `qperf`. Defer `tshark` because neither `wireshark-cli` nor a `tshark` package is available from the configured repositories.
 
 ### Transfer and Object Storage
 
-Keep `rsync` and pinned `rclone`. Add `s3fs` for S3-compatible mount testing. `s3fs` depends on FUSE behavior in the runtime environment, so documentation should make clear that using it may require pod privileges, device access, or security context changes outside the image itself.
+Keep `rsync` and pinned `rclone`. Add EPEL-provided `s3fs-fuse` for S3-compatible mount testing. `s3fs` depends on FUSE behavior in the runtime environment, so documentation should make clear that using it may require pod privileges, device access, or security context changes outside the image itself.
 
 ### Storage Performance
 
-Add `fio` for block and filesystem performance testing. It complements `rclone`, `rsync`, and `s3fs` by testing local or mounted storage paths inside the troubleshooting pod.
+Add `fio` for block and filesystem performance testing. Because official EPEL9 does not provide `fio` in the UBI9 build environment, build it from the official fio release tarball with a pinned SHA-256. It complements `rclone`, `rsync`, and `s3fs` by testing local or mounted storage paths inside the troubleshooting pod.
 
 ### Data Processing
 
@@ -108,9 +108,10 @@ Update the README network-testing-image section with a concise summary of the ex
 
 During implementation, confirm package availability from the actual build environment. These checks decide how each requested tool is sourced; they do not change the approved scope.
 
-- Is `s3fs-fuse` available from configured UBI/RHEL repositories?
-- Are `netperf` and `qperf` available without enabling unsuitable repositories?
+- Is `s3fs-fuse` available from configured UBI/RHEL or approved EPEL repositories?
+- Are `netperf` and `qperf` available from configured UBI/RHEL or approved EPEL repositories?
 - Is `wireshark-cli` packaged under that name, or should the image install the package that provides `tshark`?
+- Is `fio` available from approved repositories, or should it be source-built from the official release tarball?
 - Should `oc` and `kubectl` be downloaded from OpenShift mirror artifacts, Kubernetes release artifacts, or installed from packages if available?
 - Is `step-cli` available from package repositories, or should it use a pinned upstream release?
 

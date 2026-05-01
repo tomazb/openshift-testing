@@ -14,14 +14,19 @@ for package in \
   httpd-tools \
   jq \
   nmap \
-  ethtool; do
+  ethtool \
+  netperf \
+  qperf \
+  s3fs-fuse; do
   if ! grep -Eq "^[[:space:]]+${package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
     echo "missing expected package in Containerfile: $package" >&2
     exit 1
   fi
 done
 
-for deferred_package in whois netperf qperf wireshark-cli s3fs-fuse fio; do
+grep -Fq "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm" "$CONTAINERFILE"
+
+for deferred_package in whois wireshark-cli; do
   if grep -Eq "^[[:space:]]+${deferred_package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
     echo "deferred package must not be installed from UBI package list: $deferred_package" >&2
     exit 1
@@ -36,11 +41,17 @@ fi
 grep -Fxq "ARG OPENSHIFT_CLIENT_VERSION=4.19.12" "$CONTAINERFILE"
 grep -Fxq "ARG STEP_CLI_VERSION=0.30.2" "$CONTAINERFILE"
 grep -Fxq "ARG YQ_VERSION=v4.53.2" "$CONTAINERFILE"
+grep -Fxq "ARG FIO_VERSION=3.42" "$CONTAINERFILE"
+grep -Fxq "ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0" "$CONTAINERFILE"
 
 grep -Fq "openshift-client-linux-\${OC_ARCH}-rhel9-\${OPENSHIFT_CLIENT_VERSION}.tar.gz" "$CONTAINERFILE"
 grep -Fq "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/\${OPENSHIFT_CLIENT_VERSION}" "$CONTAINERFILE"
 grep -Fq "https://github.com/smallstep/cli/releases/download/v\${STEP_CLI_VERSION}" "$CONTAINERFILE"
 grep -Fq "https://github.com/mikefarah/yq/releases/download/\${YQ_VERSION}" "$CONTAINERFILE"
+grep -Fq "https://brick.kernel.dk/snaps/\${FIO_TARBALL}" "$CONTAINERFILE"
+grep -Fq "sha256sum -c -" "$CONTAINERFILE"
+grep -Fq "./configure --prefix=/usr/local --disable-native" "$CONTAINERFILE"
+grep -Fq "COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio" "$CONTAINERFILE"
 grep -Fq "tar -xzf \"\${YQ_TARBALL}\"" "$CONTAINERFILE"
 grep -Fq "install -m 0755 \"./\${YQ_BINARY}\" /usr/local/bin/yq" "$CONTAINERFILE"
 
