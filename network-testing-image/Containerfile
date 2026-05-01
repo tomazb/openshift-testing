@@ -95,13 +95,13 @@ RUN set -eux; \
     awk -v file="${YQ_TARBALL}" '$1 == file { print $19 "  " file }' checksums > yq.sha256; \
     test -s yq.sha256; \
     sha256sum -c yq.sha256; \
-    tar -xzf "${YQ_TARBALL}" "${YQ_BINARY}"; \
-    install -m 0755 "${YQ_BINARY}" /usr/local/bin/yq; \
-    rm -f "${YQ_TARBALL}" checksums yq.sha256 "${YQ_BINARY}"
+    tar -xzf "${YQ_TARBALL}"; \
+    install -m 0755 "./${YQ_BINARY}" /usr/local/bin/yq; \
+    rm -f "${YQ_TARBALL}" checksums yq.sha256 "${YQ_BINARY}" yq.1 install-man-page.sh
 
 RUN set -eux; \
     mkdir -p /etc/bash_completion.d; \
-    rclone genautocomplete bash /etc/bash_completion.d/rclone; \
+    env -u RCLONE_VERSION rclone genautocomplete bash /etc/bash_completion.d/rclone; \
     oc completion bash > /etc/bash_completion.d/oc; \
     kubectl completion bash > /etc/bash_completion.d/kubectl; \
     step completion bash > /etc/bash_completion.d/step; \
