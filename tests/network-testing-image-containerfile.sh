@@ -58,7 +58,23 @@ grep -Fq "tar -xzf \"\${YQ_TARBALL}\"" "$CONTAINERFILE"
 grep -Fq "install -m 0755 \"./\${YQ_BINARY}\" /usr/local/bin/yq" "$CONTAINERFILE"
 
 for completion in oc kubectl rclone step yq; do
-  grep -Fq "/etc/bash_completion.d/$completion" "$CONTAINERFILE"
+  case "$completion" in
+    oc)
+      grep -Fq 'oc completion bash > /etc/bash_completion.d/oc' "$CONTAINERFILE"
+      ;;
+    kubectl)
+      grep -Fq 'kubectl completion bash > /etc/bash_completion.d/kubectl' "$CONTAINERFILE"
+      ;;
+    rclone)
+      grep -Fq 'env -u RCLONE_VERSION rclone genautocomplete bash /etc/bash_completion.d/rclone' "$CONTAINERFILE"
+      ;;
+    step)
+      grep -Fq 'step completion bash > /etc/bash_completion.d/step' "$CONTAINERFILE"
+      ;;
+    yq)
+      grep -Fq 'yq shell-completion bash > /etc/bash_completion.d/yq' "$CONTAINERFILE"
+      ;;
+  esac
 done
 
 grep -Eq '^ARG RCLONE_VERSION=v[0-9]+\.[0-9]+\.[0-9]+$' "$CONTAINERFILE"
@@ -73,6 +89,7 @@ grep -Fq 'sha256sum -c --ignore-missing' "$CONTAINERFILE"
 grep -Fq 'checksums-bsd' "$CONTAINERFILE"
 # shellcheck disable=SC2016
 grep -Fq 'grep "SHA256 (${YQ_TARBALL})" checksums-bsd' "$CONTAINERFILE"
+grep -Fq 'sha256sum -c yq.sha256' "$CONTAINERFILE"
 grep -Fq 'test -s yq.sha256' "$CONTAINERFILE"
 grep -Fq 'env -u RCLONE_VERSION rclone genautocomplete bash /etc/bash_completion.d/rclone' "$CONTAINERFILE"
 # shellcheck disable=SC2016
