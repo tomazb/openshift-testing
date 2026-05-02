@@ -26,7 +26,7 @@ done
 
 grep -Fq "https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-10.el9.noarch.rpm" "$CONTAINERFILE"
 
-for deferred_package in whois wireshark-cli; do
+for deferred_package in whois wireshark-cli tshark; do
   if grep -Eq "^[[:space:]]+${deferred_package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
     echo "deferred package must not be installed from UBI package list: $deferred_package" >&2
     exit 1
