@@ -11,3 +11,4 @@ dns-validation/config/validation.env
 .venv/
 __pycache__/
 .codex
+.opencode/
