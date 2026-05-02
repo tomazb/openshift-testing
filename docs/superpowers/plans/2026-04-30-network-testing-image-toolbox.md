@@ -131,11 +131,12 @@ FROM registry.access.redhat.com/ubi9/ubi:9.7 AS fio-builder
 ARG FIO_VERSION=3.42
 ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0
 
+# libaio-devel is unavailable from the configured UBI9 repositories; fio still
+# builds with the I/O engines available in the base image.
 RUN dnf install -y \
     gcc \
     make \
     zlib-devel \
-    libaio-devel \
     tar \
     gzip \
     && dnf clean all
