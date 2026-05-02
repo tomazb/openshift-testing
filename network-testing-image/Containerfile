@@ -32,7 +32,7 @@ ARG RCLONE_VERSION=v1.73.5
 ARG OPENSHIFT_CLIENT_VERSION=4.19.12
 ARG STEP_CLI_VERSION=0.30.2
 ARG YQ_VERSION=v4.53.2
-ARG EPEL_RELEASE_URL=https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+ARG EPEL_RELEASE_URL=https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-10.el9.noarch.rpm
 ARG TARGETARCH
 
 # whois and wireshark-cli/tshark remain deferred because they are unavailable
@@ -107,8 +107,8 @@ RUN set -eux; \
     esac; \
     STEP_TARBALL="step_linux_${STEP_CLI_VERSION}_${STEP_ARCH}.tar.gz"; \
     STEP_BASE_URL="https://github.com/smallstep/cli/releases/download/v${STEP_CLI_VERSION}"; \
-    curl -fsSLO "${STEP_BASE_URL}/${STEP_TARBALL}"; \
-    curl -fsSLO "${STEP_BASE_URL}/checksums.txt"; \
+    curl -fsSL -O "${STEP_BASE_URL}/${STEP_TARBALL}"; \
+    curl -fsSL -O "${STEP_BASE_URL}/checksums.txt"; \
     grep "  ${STEP_TARBALL}$" checksums.txt > step.sha256; \
     sha256sum -c --ignore-missing step.sha256; \
     tar -xzf "${STEP_TARBALL}"; \
@@ -124,14 +124,14 @@ RUN set -eux; \
     YQ_BINARY="yq_linux_${YQ_ARCH}"; \
     YQ_TARBALL="${YQ_BINARY}.tar.gz"; \
     YQ_BASE_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}"; \
-    curl -fsSLO "${YQ_BASE_URL}/${YQ_TARBALL}"; \
-    curl -fsSLO "${YQ_BASE_URL}/checksums"; \
-    awk -v file="${YQ_TARBALL}" '$1 == file { print $19 "  " file }' checksums > yq.sha256; \
+    curl -fsSL -O "${YQ_BASE_URL}/${YQ_TARBALL}"; \
+    curl -fsSL -O "${YQ_BASE_URL}/checksums-bsd"; \
+    grep "SHA256 (${YQ_TARBALL})" checksums-bsd | sed 's/.*) = //; t; d' | awk -v file="${YQ_TARBALL}" '{ print $1 "  " file }' > yq.sha256; \
     test -s yq.sha256; \
     sha256sum -c yq.sha256; \
     tar -xzf "${YQ_TARBALL}"; \
     install -m 0755 "./${YQ_BINARY}" /usr/local/bin/yq; \
-    rm -f "${YQ_TARBALL}" checksums yq.sha256 "${YQ_BINARY}" yq.1 install-man-page.sh
+    rm -f "${YQ_TARBALL}" checksums-bsd yq.sha256 "${YQ_BINARY}" yq.1 install-man-page.sh
 
 RUN set -eux; \
     mkdir -p /etc/bash_completion.d; \
