@@ -24,7 +24,7 @@ for package in \
   fi
 done
 
-grep -Fq "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm" "$CONTAINERFILE"
+grep -Fq "https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-10.el9.noarch.rpm" "$CONTAINERFILE"
 
 for deferred_package in whois wireshark-cli; do
   if grep -Eq "^[[:space:]]+${deferred_package}[[:space:]]+\\\\$" "$CONTAINERFILE"; then
@@ -52,6 +52,8 @@ grep -Fq "https://brick.kernel.dk/snaps/\${FIO_TARBALL}" "$CONTAINERFILE"
 grep -Fq "sha256sum -c -" "$CONTAINERFILE"
 grep -Fq "./configure --prefix=/usr/local --disable-native" "$CONTAINERFILE"
 grep -Fq "COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio" "$CONTAINERFILE"
+# libaio-devel is intentionally omitted because it is unavailable in UBI 9
+# repositories; fio falls back to POSIX AIO and builds fine without it.
 grep -Fq "tar -xzf \"\${YQ_TARBALL}\"" "$CONTAINERFILE"
 grep -Fq "install -m 0755 \"./\${YQ_BINARY}\" /usr/local/bin/yq" "$CONTAINERFILE"
 
@@ -68,7 +70,9 @@ fi
 
 grep -Fq 'SHA256SUMS' "$CONTAINERFILE"
 grep -Fq 'sha256sum -c --ignore-missing' "$CONTAINERFILE"
-grep -Fq "awk -v file=\"\${YQ_TARBALL}\"" "$CONTAINERFILE"
+grep -Fq 'checksums-bsd' "$CONTAINERFILE"
+# shellcheck disable=SC2016
+grep -Fq 'grep "SHA256 (${YQ_TARBALL})" checksums-bsd' "$CONTAINERFILE"
 grep -Fq 'test -s yq.sha256' "$CONTAINERFILE"
 grep -Fq 'env -u RCLONE_VERSION rclone genautocomplete bash /etc/bash_completion.d/rclone' "$CONTAINERFILE"
 # shellcheck disable=SC2016
