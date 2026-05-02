@@ -27,7 +27,7 @@ Use these pins for the first implementation pass:
 - `RCLONE_VERSION=v1.73.5` from the existing image.
 - `OPENSHIFT_CLIENT_VERSION=4.19.12`, using the official OpenShift client mirror archive and `sha256sum.txt`.
 - `STEP_CLI_VERSION=0.30.2`, using the official smallstep release and `checksums.txt`.
-- `YQ_VERSION=v4.53.2`, using the official mikefarah/yq release and `checksums`.
+- `YQ_VERSION=v4.53.2`, using the official mikefarah/yq release and `checksums-bsd`.
 - `FIO_VERSION=3.42`, using the official fio release tarball from `https://brick.kernel.dk/snaps/` and a pinned SHA-256.
 
 Use EPEL only for requested tools verified to be available in EPEL9 on UBI9. If a requested package is unavailable from the configured UBI and EPEL repositories, stop and use `superpowers:systematic-debugging` to confirm the missing package before changing scope.
@@ -126,6 +126,32 @@ Expected: FAIL because the workflow still has the old command list and no comple
 Replace `network-testing-image/Containerfile` with:
 
 ```Dockerfile
+FROM registry.access.redhat.com/ubi9/ubi:9.7 AS fio-builder
+
+ARG FIO_VERSION=3.42
+ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0
+
+RUN dnf install -y \
+    gcc \
+    make \
+    zlib-devel \
+    libaio-devel \
+    tar \
+    gzip \
+    && dnf clean all
+
+RUN set -eux; \
+    FIO_TARBALL="fio-${FIO_VERSION}.tar.gz"; \
+    curl -fsSLo "${FIO_TARBALL}" "https://brick.kernel.dk/snaps/${FIO_TARBALL}"; \
+    echo "${FIO_SHA256}  ${FIO_TARBALL}" | sha256sum -c -; \
+    mkdir -p /tmp/fio-src; \
+    tar -xzf "${FIO_TARBALL}" -C /tmp/fio-src --strip-components=1; \
+    cd /tmp/fio-src; \
+    ./configure --prefix=/usr/local --disable-native; \
+    make -j"$(nproc)"; \
+    make install DESTDIR=/tmp/fio-out; \
+    /tmp/fio-out/usr/local/bin/fio --version | grep -F "fio-${FIO_VERSION}"
+
 FROM registry.access.redhat.com/ubi9/ubi:9.7
 
 LABEL org.opencontainers.image.source="https://github.com/tomazb/openshift-testing" \
@@ -135,8 +161,11 @@ ARG RCLONE_VERSION=v1.73.5
 ARG OPENSHIFT_CLIENT_VERSION=4.19.12
 ARG STEP_CLI_VERSION=0.30.2
 ARG YQ_VERSION=v4.53.2
+ARG EPEL_RELEASE_URL=https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-10.el9.noarch.rpm
 ARG TARGETARCH
 
+# whois and wireshark-cli/tshark remain deferred because they are unavailable
+# in configured UBI9 and EPEL9 repositories.
 RUN dnf install -y \
     bash-completion \
     tcpdump \
@@ -152,14 +181,20 @@ RUN dnf install -y \
     lvm2 \
     sg3_utils \
     bind-utils \
-    netperf \
-    qperf \
     httpd-tools \
     jq \
     nmap \
     ethtool \
+    && dnf clean all
+
+RUN dnf install -y "${EPEL_RELEASE_URL}" \
+    && dnf install -y \
+    netperf \
+    qperf \
     s3fs-fuse \
     && dnf clean all
+
+COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio
 
 RUN set -eux; \
     case "${TARGETARCH:-$(uname -m)}" in \
@@ -201,8 +236,8 @@ RUN set -eux; \
     esac; \
     STEP_TARBALL="step_linux_${STEP_CLI_VERSION}_${STEP_ARCH}.tar.gz"; \
     STEP_BASE_URL="https://github.com/smallstep/cli/releases/download/v${STEP_CLI_VERSION}"; \
-    curl -fsSLO "${STEP_BASE_URL}/${STEP_TARBALL}"; \
-    curl -fsSLO "${STEP_BASE_URL}/checksums.txt"; \
+    curl -fsSL -O "${STEP_BASE_URL}/${STEP_TARBALL}"; \\
+    curl -fsSL -O "${STEP_BASE_URL}/checksums.txt"; \
     grep "  ${STEP_TARBALL}$" checksums.txt > step.sha256; \
     sha256sum -c --ignore-missing step.sha256; \
     tar -xzf "${STEP_TARBALL}"; \
@@ -218,13 +253,14 @@ RUN set -eux; \
     YQ_BINARY="yq_linux_${YQ_ARCH}"; \
     YQ_TARBALL="${YQ_BINARY}.tar.gz"; \
     YQ_BASE_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}"; \
-    curl -fsSLO "${YQ_BASE_URL}/${YQ_TARBALL}"; \
-    curl -fsSLO "${YQ_BASE_URL}/checksums"; \
-    grep "  ${YQ_TARBALL}$" checksums > yq.sha256; \
-    sha256sum -c --ignore-missing yq.sha256; \
-    tar -xzf "${YQ_TARBALL}" "${YQ_BINARY}"; \
-    install -m 0755 "${YQ_BINARY}" /usr/local/bin/yq; \
-    rm -f "${YQ_TARBALL}" checksums yq.sha256 "${YQ_BINARY}"
+    curl -fsSL -O "${YQ_BASE_URL}/${YQ_TARBALL}"; \\
+    curl -fsSL -O "${YQ_BASE_URL}/checksums-bsd"; \\
+    grep "SHA256 (${YQ_TARBALL})" checksums-bsd | sed 's/.*) = //; t; d' | awk -v file="${YQ_TARBALL}" '{ print $1 "  " file }' > yq.sha256; \
+    test -s yq.sha256; \
+    sha256sum -c yq.sha256; \
+    tar -xzf "${YQ_TARBALL}"; \
+    install -m 0755 "./${YQ_BINARY}" /usr/local/bin/yq; \
+    rm -f "${YQ_TARBALL}" checksums-bsd yq.sha256 "${YQ_BINARY}" yq.1 install-man-page.sh
 
 RUN set -eux; \
     mkdir -p /etc/bash_completion.d; \
@@ -289,7 +325,8 @@ In `.github/workflows/network-testing-image.yml`, replace the `Smoke test image`
             for completion in oc kubectl rclone step yq; do
               test -s "/etc/bash_completion.d/$completion"
             done
-            source /etc/profile.d/bash_completion.sh
+            test -s /etc/profile.d/network-testing-completion.sh
+            source /etc/profile.d/network-testing-completion.sh
             test "$(rclone version | awk "NR == 1 { print \$2 }")" = "v1.73.5"
             oc version --client | grep -F "Client Version: 4.19.12"
             kubectl version --client=true
@@ -409,7 +446,8 @@ docker run --rm network-testing-image:toolbox-test bash -euxo pipefail -c '
   for completion in oc kubectl rclone step yq; do
     test -s "/etc/bash_completion.d/$completion"
   done
-  source /etc/profile.d/bash_completion.sh
+  test -s /etc/profile.d/network-testing-completion.sh
+  source /etc/profile.d/network-testing-completion.sh
   test "$(rclone version | awk "NR == 1 { print \$2 }")" = "v1.73.5"
   oc version --client | grep -F "Client Version: 4.19.12"
   kubectl version --client=true

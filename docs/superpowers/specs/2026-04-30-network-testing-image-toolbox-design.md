@@ -16,11 +16,11 @@ The image should include:
 
 - OpenShift and Kubernetes clients: `oc`, `kubectl`.
 - Shell ergonomics: `bash-completion` and completion support for the major interactive tools.
-- DNS and identity lookup tools: `bind-utils`, `whois`.
+- DNS and identity lookup tools: `bind-utils`. (`whois` deferred — not available in UBI9/EPEL9.)
 - Network benchmarking tools: `iperf3`, `netperf`, `qperf`, `ab`.
 - Transfer and object storage tools: `rsync`, `rclone`, `s3fs`.
 - Data tools: `jq`, `yq`.
-- Network inspection tools: `nmap`, `tshark`, `ethtool`, `arping`, existing route and ping tools.
+- Network inspection tools: `nmap`, `ethtool`, `arping`, existing route and ping tools. (`tshark` deferred — not available in UBI9/EPEL9.)
 - TLS and certificate tooling: `step-cli`.
 - Storage performance tooling: `fio`.
 
