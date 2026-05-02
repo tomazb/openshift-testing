@@ -26,13 +26,13 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build image for smoke test
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: network-testing-image/Containerfile
@@ -43,15 +43,32 @@ jobs:
       - name: Smoke test image
         run: |
           docker run --rm network-testing-image:test bash -euxo pipefail -c '
-            for cmd in tcpdump ip ss ping tracepath mtr iperf3 rsync curl wget unzip lvs sg_map rclone; do
+            for cmd in tcpdump ip ss ping tracepath mtr dig host nslookup iperf3 rsync curl wget unzip lvs sg_map rclone oc kubectl ab step jq yq nmap ncat ethtool arping netperf qperf s3fs fio; do
               command -v "$cmd"
             done
+            for unavailable_cmd in whois tshark; do
+              if command -v "$unavailable_cmd"; then
+                echo "deferred tool unexpectedly installed: $unavailable_cmd" >&2
+                exit 1
+              fi
+            done
+            for completion in oc kubectl rclone step yq; do
+              test -s "/etc/bash_completion.d/$completion"
+            done
+            test -s /etc/profile.d/network-testing-completion.sh
+            source /etc/profile.d/network-testing-completion.sh
             test "$(rclone version | awk "NR == 1 { print \$2 }")" = "v1.73.5"
+            oc version --client | grep -F "Client Version: 4.19.12"
+            kubectl version --client=true
+            step version | grep -F "0.30.2"
+            yq --version | grep -F "v4.53.2"
+            fio --version | grep -F "fio-3.42"
+            fio --name=smoke --filename=/tmp/fio-smoke --size=4m --rw=readwrite --bs=4k --iodepth=1 --numjobs=1 --runtime=1 --time_based --group_reporting
           '
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -60,7 +77,7 @@ jobs:
       - name: Extract image metadata
         if: github.event_name == 'push'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -72,7 +89,7 @@ jobs:
       - name: Build and push image
         if: github.event_name == 'push'
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: network-testing-image/Containerfile
