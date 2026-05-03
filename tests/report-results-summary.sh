@@ -193,12 +193,15 @@ CONFIG_FILE="$TMP_DIR/validation.env"
 cat >"$CONFIG_FILE" <<EOF
 ARTIFACT_DIR="$ARTIFACT_DIR"
 VALIDATION_NAMESPACE="dns-validation"
+VALIDATION_PROFILE="day1"
+DNSPERF_MAX_LOST_PERCENT=""
 EOF
 
 PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report.out"
 
 REPORT="$ARTIFACT_DIR/05-report/dns-validation-report.md"
 
+grep -Fq "Profile: day1" "$REPORT"
 grep -Fq "## Results summary" "$REPORT"
 grep -Fq -- "- DNS operator gate: Available=True, Progressing=False, Degraded=False" "$REPORT"
 grep -Fq -- "- DNS upstream resolvers: SystemResolvConf  53; Network 192.0.2.53 53; Network 2001:db8::53 5353" "$REPORT"
@@ -265,5 +268,38 @@ fi
 if [[ "$(tail -n 1 "$TMP_DIR/report.out")" != *"Optional perf-tests returned rc=7"* ]]; then
   echo "terminal output should end with the structured verdict reasons" >&2
   tail -n 20 "$TMP_DIR/report.out" >&2
+  exit 1
+fi
+
+cat >"$CONFIG_FILE" <<EOF
+ARTIFACT_DIR="$ARTIFACT_DIR"
+VALIDATION_NAMESPACE="dns-validation"
+VALIDATION_PROFILE="day2"
+DNS_VALIDATION_REPORT_MODE="condensed"
+EOF
+
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report-condensed.out"
+
+grep -Fq "Profile: day2" "$REPORT"
+grep -Fq -- "- Profile: \`day2\`" "$REPORT"
+grep -Fq "## DNS validation verdict" "$REPORT"
+if grep -Fq "## dnsperf detailed stats" "$REPORT"; then
+  echo "condensed report should not render dnsperf detailed stats" >&2
+  exit 1
+fi
+
+cat >"$CONFIG_FILE" <<EOF
+ARTIFACT_DIR="$ARTIFACT_DIR"
+VALIDATION_NAMESPACE="dns-validation"
+VALIDATION_PROFILE="ci"
+DNS_VALIDATION_REPORT_MODE="ci"
+EOF
+
+PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" report >"$TMP_DIR/report-ci.out"
+
+grep -Fq "Profile: ci" "$REPORT"
+grep -Fq -- "- CI summary: profile=ci;" "$REPORT"
+if grep -Fq "## DNS conformance details" "$REPORT"; then
+  echo "ci report should not render detailed DNS conformance sections" >&2
   exit 1
 fi

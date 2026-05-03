@@ -653,7 +653,7 @@ render_dns_validation_verdict() {
   render_verdict_section
 }
 
-render_results_summary() {
+render_results_summary_full() {
   local report_path="$1"
   local dns_rc passed failed skipped selected excluded
 
@@ -685,4 +685,55 @@ EOF
   render_node_sweep_stats
   echo
   render_dns_validation_verdict
+}
+
+render_results_summary_condensed() {
+  local report_path="$1"
+  local dns_rc passed failed skipped selected excluded
+
+  dns_rc="$(results_read_artifact_rc "$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc")"
+  passed="$(results_count_dns_summary_status passed)"
+  failed="$(results_count_dns_summary_status failed)"
+  skipped="$(results_count_dns_summary_status skipped)"
+  selected="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.txt")"
+  excluded="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt")"
+
+  cat <<EOF
+## Results summary
+
+- Artifact directory: \`$ARTIFACT_DIR\`
+- Report: \`$report_path\`
+- Profile: \`${VALIDATION_PROFILE:-default}\`
+- DNS operator gate: $(results_dns_operator_gate_summary)
+- openshift-tests DNS: rc=$dns_rc, passed=$passed, failed=$failed, skipped=$skipped
+- DNS tests: selected=$selected, excluded=$excluded
+- dnsperf: $(results_dnsperf_summary)
+- perf-tests: $(results_perf_tests_summary)
+- Deep diagnostics: $(results_deep_diagnostics_summary)
+EOF
+  echo
+  render_dns_validation_verdict
+}
+
+render_results_summary_ci() {
+  local report_path="$1"
+  local dns_rc verdict
+
+  dns_rc="$(results_read_artifact_rc "$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc")"
+  verdict="$(results_verdict)"
+
+  cat <<EOF
+## Results summary
+
+- CI summary: profile=${VALIDATION_PROFILE:-default}; verdict=$verdict; openshift-tests-rc=$dns_rc; dnsperf="$(results_dnsperf_summary)"; perf-tests="$(results_perf_tests_summary)"; deep-diagnostics="$(results_deep_diagnostics_summary)"; report="$report_path"
+EOF
+}
+
+render_results_summary() {
+  case "${DNS_VALIDATION_REPORT_MODE:-full}" in
+    full) render_results_summary_full "$@" ;;
+    condensed) render_results_summary_condensed "$@" ;;
+    ci) render_results_summary_ci "$@" ;;
+    *) echo "ERROR: unsupported DNS_VALIDATION_REPORT_MODE=${DNS_VALIDATION_REPORT_MODE:-}" >&2; return 2 ;;
+  esac
 }

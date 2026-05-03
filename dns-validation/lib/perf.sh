@@ -172,7 +172,7 @@ report() {
   local summary verdict
   results_compute_verdict
   verdict="$(results_verdict)"
-  if [[ "$verdict" != "$VERDICT_ACCEPTED" ]]; then
+  if [[ "${DNS_VALIDATION_DEEP_DIAGNOSTICS:-on-risk}" == "always" || "$verdict" != "$VERDICT_ACCEPTED" ]]; then
     collect_deep_diagnostics
     results_compute_verdict
   fi
@@ -181,6 +181,7 @@ report() {
   cat >"$f" <<EOF
 # OpenShift DNS Validation Report
 
+Profile: ${VALIDATION_PROFILE:-default}
 Generated: $(date -Iseconds)
 
 ## Runtime

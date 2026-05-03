@@ -37,6 +37,35 @@ The text frontend exposes the validation steps in a controlled order:
 14) Show artifact paths
 ```
 
+## Profiles
+
+Profiles select validation defaults for common scenarios. Choose a profile with `--profile`, `DNS_VALIDATION_PROFILE`, or `VALIDATION_PROFILE` in `config/validation.env`.
+
+Profile selection precedence:
+
+1. `--profile <name>`
+2. `DNS_VALIDATION_PROFILE`
+3. `VALIDATION_PROFILE` in `validation.env`
+4. `default`
+
+Concrete settings load as profile defaults first, then `validation.env` last. This means `validation.env` can override any profile-controlled setting.
+
+| Profile | Purpose | Key defaults |
+|---------|---------|--------------|
+| `default` | Current baseline behavior | Existing DNS exclusions, standard dnsperf ladder, full report |
+| `day1` | Conservative post-install validation | Serial DNS tests, no DNS test exclusions, 120s dnsperf, zero-loss threshold |
+| `day2` | Operational health for existing clusters | No serial DNS tests, shorter dnsperf, `100 500` QPS ladder, condensed report |
+| `ci` | CI pipelines | `AUTO_YES=true`, no serial tests, no DNS test exclusions, strict thresholds, CI report mode |
+| `customer-evidence` | Customer-facing evidence collection | Serial DNS tests, extended QPS ladder, more clients and threads, deep diagnostics always |
+
+Examples:
+
+```bash
+bash bin/ocp-dns-validate --profile day1 --config config/validation.env all
+DNS_VALIDATION_PROFILE=ci bash bin/ocp-dns-validate --config config/validation.env all
+echo 'VALIDATION_PROFILE="day2"' >> config/validation.env
+```
+
 ## Non-interactive run
 
 ```bash
