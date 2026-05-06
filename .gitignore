@@ -12,3 +12,4 @@ dns-validation/config/validation.env
 __pycache__/
 .codex
 .opencode/
+.worktrees/
