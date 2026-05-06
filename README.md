@@ -42,7 +42,7 @@ The `network-validation/` directory contains an iperf3-based network throughput 
 
 - automated iperf3 server/client pod deployment on selected nodes
 - topology-aware test scenarios: cross-node, same-node, host-network, pod-to-service
-- CoreOS-compatible metric collection (CPU, network counters, softirqs, memory) via pod exec
+- CoreOS-compatible server/client artifact and metric collection via a mounted pod-side collector
 - OVN-Kubernetes diagnostics capture (logs, OVN DB state, GenEve tunnel stats)
 - structured `Accepted`, `Accepted with risks`, or `Blocked` verdicts
 - markdown report generation

@@ -2,7 +2,7 @@
 
 Automated iperf3-based network throughput validation for OpenShift clusters with CoreOS nodes.
 
-Deploys iperf3 server and client pods via `oc`, runs topology-aware tests (cross-node, same-node, host-network, pod-to-service), collects system metrics from inside pods, captures OVN-Kubernetes diagnostics, and produces a structured markdown report with `Accepted` / `Accepted with risks` / `Blocked` verdicts.
+Deploys iperf3 server and client pods via `oc`, runs topology-aware tests (cross-node, same-node, host-network, pod-to-service), mounts a pod-side collector for server and client artifacts, captures OVN-Kubernetes diagnostics, and produces a structured markdown report with `Accepted` / `Accepted with risks` / `Blocked` verdicts.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Deploys iperf3 server and client pods via `oc`, runs topology-aware tests (cross
 # Interactive menu
 bash bin/ocp-network-validate menu
 
-# Run recommended sequence (preflight → deploy → cross-node → OVN diagnostics → report)
+# Run recommended TCP sequence (preflight → deploy → cross-node → OVN diagnostics → report)
 bash bin/ocp-network-validate --yes all
 
 # Run with custom config
@@ -47,11 +47,17 @@ See `config/validation.env.example` for all available settings. Key options:
 
 - `IPERF_IMAGE` — container image for pods (default: `ghcr.io/tomazb/openshift-testing/network-testing-image:latest`)
 - `IPERF_SERVER_NODE` / `IPERF_CLIENT_NODE` — pin pods to specific nodes (default: auto-select workers)
+- `IPERF_SERVER_ADDRESS` — optional address override for the client target
 - `IPERF_HOST_NETWORK` — use `hostNetwork: true` (default: `false`)
-- `IPERF_PROTOCOL` — `udp` or `tcp` (default: `udp`)
+- `IPERF_PRIVILEGED_MODE` — leave empty to match host-network mode, or set `false` for best-effort restricted host-network metrics
+- `IPERF_PROTOCOL` — `tcp` or `udp` (default: `tcp`)
+- `IPERF_PACKET_SIZE` — UDP payload size or `auto` from the selected interface MTU
+- `IPERF_INTERFACE` — interface to monitor inside the pod-side collector (`auto` by default)
 - `IPERF_DURATION` — test duration in seconds (default: `30`)
 - `IPERF_MIN_THROUGHPUT_GBPS` — minimum acceptable throughput for verdict (default: `0` = skip)
 - `IPERF_MAX_LOSS_PERCENT` — maximum acceptable packet loss (default: `1`)
+
+TCP is the recommended baseline profile. Use `IPERF_PROTOCOL=udp` when the goal is explicit loss, jitter, and UDP payload-size validation.
 
 ## Artifact structure
 
@@ -61,6 +67,8 @@ Each run creates a timestamped directory under `runs/`:
 runs/<timestamp>/
   00-preflight/       — cluster and network baseline
   01-cross-node/      — cross-node test results and metrics
+    client/           — client collector artifacts and iperf3 JSON
+    server/           — server collector artifacts and iperf3 JSON
   02-same-node/       — same-node test results
   03-host-network/    — host-network test results
   04-pod-to-service/  — ClusterIP service path test results
@@ -68,6 +76,6 @@ runs/<timestamp>/
   06-report/          — markdown report and verdict
 ```
 
-## Standalone fallback
+## Collector
 
-The original `iperf3/iperf3-network-metrics-collector.sh` is preserved for direct host-level use (SSH, `oc debug node/`, or `toolbox`).
+The pod-side collector is mounted from `network-validation/lib/iperf3-collector.sh` into both validation pods. It records iperf3 JSON, per-side return codes, baseline network details, and lightweight CPU/network counter samples for the server and client side of each scenario.
