@@ -22,6 +22,12 @@ Some tools need extra pod permissions to be useful. Packet capture, low-level in
 
 Tools that are not available from the configured UBI9 and EPEL9 repositories are intentionally deferred rather than added through weak package sources. Deferred tools currently include `whois` and `tshark`.
 
+### iperf3 validation
+
+The `iperf3-validation/` directory contains an OpenShift wrapper for selected CoreOS node-to-node throughput testing. It schedules one iperf3 server pod and one client pod on explicitly named nodes, mounts the collector script from a generated ConfigMap, copies per-pod artifacts, and renders a concise report.
+
+The default profile is TCP. UDP is available for explicit loss and jitter tests. Full host-level CoreOS diagnostics require privileged host-network pods; a best-effort mode is available for restricted clusters.
+
 ### DNS validation
 
 The `dns-validation/` directory contains a text-fronted automation wrapper for DNS-focused post-install validation:
