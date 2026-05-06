@@ -11,6 +11,7 @@ collect_pod_baseline() {
   local f="$d/00_baseline.txt"
 
   log "Collecting baseline from pod $pod..."
+  # shellcheck disable=SC2016 # script is evaluated inside the target pod.
   oc -n "$IPERF_NAMESPACE" exec "$pod" -- bash -c '
     echo "=== Baseline collected at $(date -Iseconds) ==="
     echo "--- Hostname / Uptime ---"
@@ -163,6 +164,7 @@ collect_pod_posttest() {
   local f="$d/99_posttest.txt"
 
   log "Collecting post-test snapshot from pod $pod..."
+  # shellcheck disable=SC2016 # script is evaluated inside the target pod.
   oc -n "$IPERF_NAMESPACE" exec "$pod" -- bash -c '
     echo "=== Post-test collected at $(date -Iseconds) ==="
     echo "--- Interface counters ---"
