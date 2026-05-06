@@ -35,3 +35,16 @@ The `dns-validation/` directory contains a text-fronted automation wrapper for D
 - markdown report generation
 
 See `dns-validation/README.md` for usage instructions.
+
+### Network validation
+
+The `network-validation/` directory contains an iperf3-based network throughput validation tool for OpenShift clusters with CoreOS nodes:
+
+- automated iperf3 server/client pod deployment on selected nodes
+- topology-aware test scenarios: cross-node, same-node, host-network, pod-to-service
+- CoreOS-compatible metric collection (CPU, network counters, softirqs, memory) via pod exec
+- OVN-Kubernetes diagnostics capture (logs, OVN DB state, GenEve tunnel stats)
+- structured `Accepted`, `Accepted with risks`, or `Blocked` verdicts
+- markdown report generation
+
+See `network-validation/README.md` for usage instructions.
