@@ -11,6 +11,8 @@ bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n dns-validation/lib/results.sh
+bash -n iperf3-validation/bin/ocp-iperf3-validate
+bash -n iperf3/iperf3-network-metrics-collector.sh
 bash -n scripts/check-static.sh
 for test_script in "${test_scripts[@]}"; do
   bash -n "$test_script"
@@ -26,6 +28,8 @@ shellcheck -x \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
   dns-validation/lib/results.sh \
+  iperf3-validation/bin/ocp-iperf3-validate \
+  iperf3/iperf3-network-metrics-collector.sh \
   scripts/check-static.sh \
   "${test_scripts[@]}"
 

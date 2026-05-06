@@ -1,0 +1,448 @@
+#!/usr/bin/env bash
+# OpenShift iperf3 node-pair validation harness.
+set -Eeuo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$PROJECT_DIR/.." && pwd)"
+CONFIG_FILE="$PROJECT_DIR/config/validation.env"
+CONFIG_FILE_EXPLICIT="false"
+ACTION="all"
+AUTO_YES="${AUTO_YES:-false}"
+
+usage() {
+  cat <<USAGE
+Usage: $SCRIPT_NAME [--config FILE] [--yes] <action>
+
+Actions:
+  init        Check local tools and create artifact directories
+  preflight   Capture cluster baseline and validate selected nodes
+  run-pair    Run one iperf3 server/client pair on selected nodes
+  report      Generate markdown report
+  cleanup     Delete validation namespace
+  all         Run init, preflight, run-pair, and report
+
+Examples:
+  bash bin/ocp-iperf3-validate --config config/validation.env all
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c|--config)
+      [[ $# -ge 2 && -n "${2:-}" && "${2:0:1}" != "-" ]] || { echo "ERROR: --config requires a file path" >&2; exit 2; }
+      CONFIG_FILE="$2"
+      CONFIG_FILE_EXPLICIT="true"
+      shift 2
+      ;;
+    -y|--yes) AUTO_YES="true"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *)
+      ACTION="$1"
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ -f "$CONFIG_FILE" && -r "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+elif [[ "$CONFIG_FILE_EXPLICIT" == "true" ]]; then
+  echo "ERROR: --config file not found or not readable: $CONFIG_FILE" >&2
+  exit 2
+fi
+
+RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+ARTIFACT_ROOT="${ARTIFACT_ROOT:-$PROJECT_DIR/runs}"
+ARTIFACT_DIR="${ARTIFACT_DIR:-$ARTIFACT_ROOT/$RUN_ID}"
+KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+VALIDATION_NAMESPACE="${VALIDATION_NAMESPACE:-iperf3-validation}"
+IPERF3_IMAGE="${IPERF3_IMAGE:-ghcr.io/tomazb/openshift-testing/network-testing-image:latest}"
+IPERF3_SERVER_NODE="${IPERF3_SERVER_NODE:-}"
+IPERF3_CLIENT_NODE="${IPERF3_CLIENT_NODE:-}"
+IPERF3_SERVER_ADDRESS="${IPERF3_SERVER_ADDRESS:-}"
+IPERF3_PROTOCOL="${IPERF3_PROTOCOL:-tcp}"
+IPERF3_DURATION_SECONDS="${IPERF3_DURATION_SECONDS:-30}"
+IPERF3_PORT="${IPERF3_PORT:-5201}"
+IPERF3_PARALLEL="${IPERF3_PARALLEL:-1}"
+IPERF3_SOCKET_BUFFER="${IPERF3_SOCKET_BUFFER:-256M}"
+IPERF3_BANDWIDTH="${IPERF3_BANDWIDTH:-0}"
+IPERF3_PACKET_SIZE="${IPERF3_PACKET_SIZE:-auto}"
+IPERF3_INTERFACE="${IPERF3_INTERFACE:-auto}"
+IPERF3_PRIVILEGED_MODE="${IPERF3_PRIVILEGED_MODE:-true}"
+IPERF3_MIN_TCP_GBPS="${IPERF3_MIN_TCP_GBPS:-}"
+IPERF3_MAX_UDP_LOSS_PERCENT="${IPERF3_MAX_UDP_LOSS_PERCENT:-}"
+SERVER_WAIT_TIMEOUT="${SERVER_WAIT_TIMEOUT:-120s}"
+CLIENT_WAIT_TIMEOUT="${CLIENT_WAIT_TIMEOUT:-180s}"
+
+export KUBECONFIG
+LOG_FILE="$ARTIFACT_DIR/ocp-iperf3-validate.log"
+RUNTIME_ENV="$ARTIFACT_DIR/runtime.env"
+
+log() {
+  printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG_FILE"
+}
+
+warn() {
+  log "WARN: $*"
+}
+
+fail() {
+  log "ERROR: $*"
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+config_error() {
+  echo "ERROR: Invalid config: $*" >&2
+  exit 2
+}
+
+validate_positive_integer() {
+  local name="$1" value="$2"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || config_error "$name must be a positive integer"
+}
+
+validate_optional_non_negative_number() {
+  local name="$1" value="$2"
+  [[ -z "$value" || "$value" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)$ ]] || config_error "$name must be a non-negative number"
+}
+
+validate_config() {
+  [[ -n "$IPERF3_SERVER_NODE" ]] || config_error "IPERF3_SERVER_NODE is required"
+  [[ -n "$IPERF3_CLIENT_NODE" ]] || config_error "IPERF3_CLIENT_NODE is required"
+  validate_positive_integer IPERF3_DURATION_SECONDS "$IPERF3_DURATION_SECONDS"
+  validate_positive_integer IPERF3_PORT "$IPERF3_PORT"
+  validate_positive_integer IPERF3_PARALLEL "$IPERF3_PARALLEL"
+  validate_optional_non_negative_number IPERF3_MIN_TCP_GBPS "$IPERF3_MIN_TCP_GBPS"
+  validate_optional_non_negative_number IPERF3_MAX_UDP_LOSS_PERCENT "$IPERF3_MAX_UDP_LOSS_PERCENT"
+
+  case "$IPERF3_PROTOCOL" in
+    tcp|udp) ;;
+    *) config_error "IPERF3_PROTOCOL must be tcp or udp" ;;
+  esac
+
+  case "$IPERF3_PRIVILEGED_MODE" in
+    true|false) ;;
+    *) config_error "IPERF3_PRIVILEGED_MODE must be true or false" ;;
+  esac
+}
+
+init_dirs() {
+  mkdir -p \
+    "$ARTIFACT_DIR/00-preflight" \
+    "$ARTIFACT_DIR/01-run/client" \
+    "$ARTIFACT_DIR/01-run/server" \
+    "$ARTIFACT_DIR/02-report" \
+    "$ARTIFACT_DIR/tmp"
+  touch "$LOG_FILE"
+}
+
+run_capture() {
+  local out="$1"
+  local rc_file="$2"
+  local rc
+  shift 2
+
+  log "+ $* > $out"
+  ( set +e; "$@" >"$out" 2>&1; printf '%s\n' "$?" >"$rc_file" )
+  rc="$(tr -d '[:space:]' <"$rc_file" 2>/dev/null || true)"
+  [[ "$rc" =~ ^[0-9]+$ ]] || rc=1
+  return "$rc"
+}
+
+run_out() {
+  local out="$1"
+  shift
+  run_capture "$out" "$out.rc" "$@" || warn "rc=$? for $*; see $out"
+}
+
+write_runtime_kv() {
+  local key="$1" value="$2"
+  grep -v "^${key}=" "$RUNTIME_ENV" 2>/dev/null >"$RUNTIME_ENV.tmp" || true
+  mv "$RUNTIME_ENV.tmp" "$RUNTIME_ENV"
+  printf '%s=%q\n' "$key" "$value" >>"$RUNTIME_ENV"
+}
+
+read_runtime() {
+  [[ -f "$RUNTIME_ENV" ]] || return 0
+  # shellcheck disable=SC1090
+  source "$RUNTIME_ENV"
+}
+
+ensure_namespace() {
+  oc get ns "$VALIDATION_NAMESPACE" >/dev/null 2>&1 || oc create namespace "$VALIDATION_NAMESPACE"
+}
+
+init_action() {
+  init_dirs
+  require_cmd oc
+  run_out "$ARTIFACT_DIR/00-preflight/oc-version.txt" oc version
+  run_out "$ARTIFACT_DIR/00-preflight/whoami.txt" oc whoami
+  log "Initialization complete. Artifacts: $ARTIFACT_DIR"
+}
+
+preflight() {
+  init_dirs
+  require_cmd oc
+  log "Capturing OpenShift iperf3 baseline."
+  run_out "$ARTIFACT_DIR/00-preflight/oc-version.txt" oc version
+  run_out "$ARTIFACT_DIR/00-preflight/whoami.txt" oc whoami
+  run_out "$ARTIFACT_DIR/00-preflight/nodes-wide.txt" oc get nodes -o wide
+  run_capture "$ARTIFACT_DIR/00-preflight/server-node.txt" "$ARTIFACT_DIR/00-preflight/server-node.txt.rc" oc get node "$IPERF3_SERVER_NODE" -o name \
+    || fail "server node not found: $IPERF3_SERVER_NODE"
+  run_capture "$ARTIFACT_DIR/00-preflight/client-node.txt" "$ARTIFACT_DIR/00-preflight/client-node.txt.rc" oc get node "$IPERF3_CLIENT_NODE" -o name \
+    || fail "client node not found: $IPERF3_CLIENT_NODE"
+  if [[ -z "$IPERF3_SERVER_ADDRESS" ]]; then
+    IPERF3_SERVER_ADDRESS="$(oc get node "$IPERF3_SERVER_NODE" -o 'jsonpath={.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    [[ -n "$IPERF3_SERVER_ADDRESS" ]] || fail "could not determine InternalIP for server node: $IPERF3_SERVER_NODE"
+  fi
+  write_runtime_kv IPERF3_SERVER_ADDRESS "$IPERF3_SERVER_ADDRESS"
+}
+
+yaml_literal_file() {
+  local file="$1"
+  sed 's/^/    /' "$file"
+}
+
+pod_security_context() {
+  if [[ "$IPERF3_PRIVILEGED_MODE" == "true" ]]; then
+    cat <<'YAML'
+      securityContext:
+        privileged: true
+        runAsUser: 0
+YAML
+  else
+    cat <<'YAML'
+      securityContext:
+        runAsUser: 0
+YAML
+  fi
+}
+
+common_pod_args() {
+  local role="$1" peer="$2" out_dir="$3"
+  printf '%s\n' \
+    "--role" "$role" \
+    "--protocol" "$IPERF3_PROTOCOL" \
+    "--port" "$IPERF3_PORT" \
+    "--duration" "$IPERF3_DURATION_SECONDS" \
+    "--parallel" "$IPERF3_PARALLEL" \
+    "--window" "$IPERF3_SOCKET_BUFFER" \
+    "--interface" "$IPERF3_INTERFACE" \
+    "--output" "$out_dir" \
+    "--peer" "$peer"
+  if [[ "$role" == "client" ]]; then
+    printf '%s\n' "--target" "$IPERF3_SERVER_ADDRESS"
+  fi
+  if [[ "$IPERF3_PROTOCOL" == "udp" ]]; then
+    printf '%s\n' "--bandwidth" "$IPERF3_BANDWIDTH" "--packet-size" "$IPERF3_PACKET_SIZE"
+  fi
+}
+
+render_pod_manifest() {
+  local name="$1" node="$2" role="$3" peer="$4" out_dir="$5"
+  cat <<YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name
+  namespace: $VALIDATION_NAMESPACE
+  labels:
+    app: iperf3-validation
+    role: $role
+spec:
+  restartPolicy: Never
+  hostNetwork: true
+  hostPID: $IPERF3_PRIVILEGED_MODE
+  nodeSelector:
+    kubernetes.io/hostname: $node
+  tolerations:
+  - operator: Exists
+  containers:
+  - name: iperf3
+    image: $IPERF3_IMAGE
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/bash", "/opt/iperf3/collector.sh"]
+    args:
+YAML
+  while read -r arg; do
+    printf '    - "%s"\n' "$arg"
+  done < <(common_pod_args "$role" "$peer" "$out_dir")
+  cat <<YAML
+    volumeMounts:
+    - name: collector
+      mountPath: /opt/iperf3
+      readOnly: true
+YAML
+  pod_security_context
+  if [[ "$role" == "server" ]]; then
+    cat <<YAML
+    readinessProbe:
+      tcpSocket:
+        port: $IPERF3_PORT
+      periodSeconds: 1
+      failureThreshold: 30
+YAML
+  fi
+  cat <<'YAML'
+  volumes:
+  - name: collector
+    configMap:
+      name: iperf3-collector
+      defaultMode: 0755
+YAML
+}
+
+write_manifest() {
+  local manifest="$ARTIFACT_DIR/01-run/iperf3-pair.yaml"
+  local server_manifest="$ARTIFACT_DIR/01-run/iperf3-server.yaml"
+  local client_manifest="$ARTIFACT_DIR/01-run/iperf3-client.yaml"
+  local collector="$REPO_ROOT/iperf3/iperf3-network-metrics-collector.sh"
+  [[ -f "$collector" ]] || fail "collector script missing: $collector"
+
+  {
+    cat <<YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iperf3-collector
+  namespace: $VALIDATION_NAMESPACE
+data:
+  collector.sh: |
+YAML
+    yaml_literal_file "$collector"
+    echo "---"
+    render_pod_manifest iperf3-server "$IPERF3_SERVER_NODE" server "$IPERF3_CLIENT_NODE" /tmp/iperf3-server
+    echo "---"
+    render_pod_manifest iperf3-client "$IPERF3_CLIENT_NODE" client "$IPERF3_SERVER_NODE" /tmp/iperf3-client
+  } >"$manifest"
+
+  awk 'BEGIN{doc=0} /^---$/{doc++; next} doc == 0 || doc == 1 {print}' "$manifest" >"$server_manifest"
+  awk 'BEGIN{doc=0} /^---$/{doc++; next} doc == 0 || doc == 2 {print}' "$manifest" >"$client_manifest"
+}
+
+copy_artifacts() {
+  local pod="$1" remote="$2" local_dir="$3"
+  mkdir -p "$local_dir"
+  oc -n "$VALIDATION_NAMESPACE" logs "$pod" >"$local_dir/$pod.log" 2>"$local_dir/$pod.logs.stderr" || warn "could not capture logs for $pod"
+  oc -n "$VALIDATION_NAMESPACE" cp "$pod:$remote" "$local_dir" >"$local_dir/$pod.cp.log" 2>"$local_dir/$pod.cp.stderr" || warn "could not copy artifacts from $pod"
+}
+
+run_pair() {
+  init_dirs
+  read_runtime
+  [[ -n "$IPERF3_SERVER_ADDRESS" ]] || fail "server address unavailable; run preflight first"
+  ensure_namespace
+  write_manifest
+
+  log "Applying iperf3 server manifest for node $IPERF3_SERVER_NODE."
+  oc apply -f "$ARTIFACT_DIR/01-run/iperf3-server.yaml" | tee -a "$LOG_FILE"
+  run_capture "$ARTIFACT_DIR/01-run/server-wait.txt" "$ARTIFACT_DIR/01-run/server-wait.txt.rc" \
+    oc -n "$VALIDATION_NAMESPACE" wait pod/iperf3-server --for=condition=Ready --timeout="$SERVER_WAIT_TIMEOUT" \
+    || fail "iperf3 server did not become ready"
+
+  log "Applying iperf3 client manifest for node $IPERF3_CLIENT_NODE."
+  oc apply -f "$ARTIFACT_DIR/01-run/iperf3-client.yaml" | tee -a "$LOG_FILE"
+  run_capture "$ARTIFACT_DIR/01-run/client-wait.txt" "$ARTIFACT_DIR/01-run/client-wait.txt.rc" \
+    oc -n "$VALIDATION_NAMESPACE" wait pod/iperf3-client --for=condition=Ready --timeout="$CLIENT_WAIT_TIMEOUT" \
+    || warn "iperf3 client pod did not report Ready before log collection"
+
+  copy_artifacts iperf3-client /tmp/iperf3-client "$ARTIFACT_DIR/01-run/client"
+  copy_artifacts iperf3-server /tmp/iperf3-server "$ARTIFACT_DIR/01-run/server"
+}
+
+jq_number() {
+  local query="$1" file="$2"
+  jq -r "$query // empty" "$file" 2>/dev/null || true
+}
+
+report() {
+  init_dirs
+  local report_file="$ARTIFACT_DIR/02-report/iperf3-validation-report.md"
+  local client_json="$ARTIFACT_DIR/01-run/client/iperf3_client.json"
+  local verdict="Accepted"
+  local reasons=()
+  local throughput_bps="" throughput_gbps="" lost_pct=""
+
+  if [[ ! -s "$client_json" ]]; then
+    verdict="Blocked"
+    reasons+=("client iperf3 JSON artifact missing")
+  elif [[ "$IPERF3_PROTOCOL" == "tcp" ]]; then
+    throughput_bps="$(jq_number '.end.sum_received.bits_per_second' "$client_json")"
+    if [[ -n "$throughput_bps" ]]; then
+      throughput_gbps="$(awk -v bps="$throughput_bps" 'BEGIN { printf "%.2f", bps / 1000000000 }')"
+      if [[ -n "$IPERF3_MIN_TCP_GBPS" ]]; then
+        awk -v actual="$throughput_gbps" -v min="$IPERF3_MIN_TCP_GBPS" 'BEGIN { exit(actual + 0 >= min + 0 ? 0 : 1) }' || {
+          verdict="Blocked"
+          reasons+=("TCP throughput ${throughput_gbps} Gbps is below configured minimum ${IPERF3_MIN_TCP_GBPS} Gbps")
+        }
+      fi
+    else
+      verdict="Blocked"
+      reasons+=("TCP throughput missing from client JSON")
+    fi
+  else
+    lost_pct="$(jq_number '.end.sum.lost_percent' "$client_json")"
+    if [[ -n "$lost_pct" && -n "$IPERF3_MAX_UDP_LOSS_PERCENT" ]]; then
+      awk -v actual="$lost_pct" -v max="$IPERF3_MAX_UDP_LOSS_PERCENT" 'BEGIN { exit(actual + 0 <= max + 0 ? 0 : 1) }' || {
+        verdict="Blocked"
+        reasons+=("UDP loss ${lost_pct}% exceeds configured maximum ${IPERF3_MAX_UDP_LOSS_PERCENT}%")
+      }
+    fi
+  fi
+
+  {
+    echo "# iperf3 validation report"
+    echo
+    echo "## Results summary"
+    echo
+    echo "- Artifact directory: \`$ARTIFACT_DIR\`"
+    echo "- Server node: $IPERF3_SERVER_NODE"
+    echo "- Client node: $IPERF3_CLIENT_NODE"
+    echo "- Protocol: $IPERF3_PROTOCOL"
+    echo "- Privileged mode: $IPERF3_PRIVILEGED_MODE"
+    if [[ -n "$throughput_gbps" ]]; then
+      echo "- TCP throughput: ${throughput_gbps} Gbps"
+    fi
+    if [[ -n "$lost_pct" ]]; then
+      echo "- UDP loss: ${lost_pct}%"
+    fi
+    echo
+    echo "## Verdict"
+    echo
+    echo "- Verdict: $verdict"
+    if ((${#reasons[@]} > 0)); then
+      echo "- Reasons:"
+      printf '  - %s\n' "${reasons[@]}"
+    fi
+  } >"$report_file"
+
+  log "Report written: $report_file"
+  cat "$report_file"
+  [[ "$verdict" == "Accepted" ]]
+}
+
+cleanup() {
+  init_dirs
+  require_cmd oc
+  oc delete namespace "$VALIDATION_NAMESPACE" --ignore-not-found=true | tee -a "$LOG_FILE"
+}
+
+validate_config
+init_dirs
+
+case "$ACTION" in
+  init) init_action ;;
+  preflight) preflight ;;
+  run-pair) run_pair ;;
+  report) report ;;
+  cleanup) cleanup ;;
+  all) init_action; preflight; run_pair; report ;;
+  *) usage; exit 2 ;;
+esac
