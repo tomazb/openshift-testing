@@ -84,11 +84,9 @@ write_runtime_kv() {
   local key="$1" value="$2"
   [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail "Invalid runtime key: $key"
   mkdir -p "$(dirname "$RUNTIME_ENV")"
-  if [[ -f "$RUNTIME_ENV" ]]; then
-    grep -v "^${key}=" "$RUNTIME_ENV" >"$RUNTIME_ENV.tmp" || true
-    mv "$RUNTIME_ENV.tmp" "$RUNTIME_ENV"
-  fi
-  printf '%s=%q\n' "$key" "$value" >>"$RUNTIME_ENV"
+  grep -v "^${key}=" "$RUNTIME_ENV" >"$RUNTIME_ENV.tmp" 2>/dev/null || true
+  printf '%s=%q\n' "$key" "$value" >>"$RUNTIME_ENV.tmp"
+  mv "$RUNTIME_ENV.tmp" "$RUNTIME_ENV"
 }
 
 runtime_key_prefix() {

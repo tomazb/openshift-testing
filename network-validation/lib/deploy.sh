@@ -54,14 +54,50 @@ deployment_matches_request() {
   [[ "${DEPLOYED_IPERF_SERVER_NODE:-}" == "${IPERF_SERVER_NODE:-}" ]] || return 1
   [[ "${DEPLOYED_IPERF_CLIENT_NODE:-}" == "${IPERF_CLIENT_NODE:-}" ]] || return 1
   [[ "${DEPLOYED_IPERF_HOST_NETWORK:-}" == "${IPERF_HOST_NETWORK:-false}" ]] || return 1
+  [[ "${DEPLOYED_IPERF_PRIVILEGED_MODE:-}" == "$(effective_privileged_mode "${IPERF_HOST_NETWORK:-false}")" ]] || return 1
   [[ "${DEPLOYED_IPERF_NAMESPACE:-}" == "$IPERF_NAMESPACE" ]] || return 1
   [[ "${DEPLOYED_IPERF_IMAGE:-}" == "$IPERF_IMAGE" ]] || return 1
+}
+
+effective_privileged_mode() {
+  local host_net="$1"
+  if [[ -n "${IPERF_PRIVILEGED_MODE:-}" ]]; then
+    echo "$IPERF_PRIVILEGED_MODE"
+  else
+    echo "$host_net"
+  fi
+}
+
+yaml_literal_file() {
+  local file="$1"
+  sed 's/^/    /' "$file"
+}
+
+generate_collector_configmap() {
+  local manifest="$ARTIFACT_DIR/tmp/network-validation-collector.yaml"
+  local collector="$PROJECT_DIR/lib/iperf3-collector.sh"
+  [[ -f "$collector" ]] || fail "Collector script missing: $collector"
+
+  {
+    cat <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-validation-collector
+  namespace: ${IPERF_NAMESPACE}
+data:
+  iperf3-collector.sh: |
+EOF
+    yaml_literal_file "$collector"
+  } > "$manifest"
 }
 
 # Generate a pod manifest for iperf3 server or client.
 # Arguments: <pod-name> <node-name> <host-network: true|false>
 generate_pod_manifest() {
   local pod_name="$1" node_name="$2" host_net="$3"
+  local privileged
+  privileged="$(effective_privileged_mode "$host_net")"
 
   cat <<EOF
 apiVersion: v1
@@ -77,12 +113,23 @@ spec:
   nodeSelector:
     kubernetes.io/hostname: "${node_name}"
   hostNetwork: ${host_net}
+  hostPID: ${privileged}
   containers:
   - name: iperf3
     image: ${IPERF_IMAGE}
     command: ["sleep", "3600"]
+    volumeMounts:
+    - name: network-validation-collector
+      mountPath: /opt/network-validation
+      readOnly: true
     securityContext:
-      privileged: ${host_net}
+      privileged: ${privileged}
+      runAsUser: 0
+  volumes:
+  - name: network-validation-collector
+    configMap:
+      name: network-validation-collector
+      defaultMode: 0755
 EOF
 }
 
@@ -97,15 +144,19 @@ deploy_pods() {
   ensure_namespace
 
   local host_net="${IPERF_HOST_NETWORK}"
+  local privileged
+  privileged="$(effective_privileged_mode "$host_net")"
   local server_manifest="$ARTIFACT_DIR/tmp/iperf3-server.yaml"
   local client_manifest="$ARTIFACT_DIR/tmp/iperf3-client.yaml"
 
+  generate_collector_configmap
   generate_pod_manifest "iperf3-server" "$IPERF_SERVER_NODE" "$host_net" > "$server_manifest"
   generate_pod_manifest "iperf3-client" "$IPERF_CLIENT_NODE" "$host_net" > "$client_manifest"
 
   # Clean up any previous pods
   oc -n "$IPERF_NAMESPACE" delete pod/iperf3-server pod/iperf3-client --ignore-not-found=true >/dev/null 2>&1 || true
 
+  run oc apply -f "$ARTIFACT_DIR/tmp/network-validation-collector.yaml"
   run oc apply -f "$server_manifest"
   run oc apply -f "$client_manifest"
 
@@ -132,6 +183,7 @@ deploy_pods() {
   write_runtime_kv DEPLOYED_IPERF_SERVER_NODE "$IPERF_SERVER_NODE"
   write_runtime_kv DEPLOYED_IPERF_CLIENT_NODE "$IPERF_CLIENT_NODE"
   write_runtime_kv DEPLOYED_IPERF_HOST_NETWORK "$host_net"
+  write_runtime_kv DEPLOYED_IPERF_PRIVILEGED_MODE "$privileged"
   write_runtime_kv DEPLOYED_IPERF_NAMESPACE "$IPERF_NAMESPACE"
   write_runtime_kv DEPLOYED_IPERF_IMAGE "$IPERF_IMAGE"
 
@@ -147,7 +199,7 @@ get_target_ip() {
   read_runtime
   case "$mode" in
     host)
-      echo "${SERVER_HOST_IP:-${SERVER_POD_IP:-}}"
+      echo "${IPERF_SERVER_ADDRESS:-${SERVER_HOST_IP:-${SERVER_POD_IP:-}}}"
       ;;
     service)
       local svc_ip
@@ -155,7 +207,7 @@ get_target_ip() {
       echo "$svc_ip"
       ;;
     *)
-      echo "${SERVER_POD_IP:-}"
+      echo "${IPERF_SERVER_ADDRESS:-${SERVER_POD_IP:-}}"
       ;;
   esac
 }

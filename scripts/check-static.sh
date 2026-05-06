@@ -17,6 +17,7 @@ bash -n network-validation/lib/cluster.sh
 bash -n network-validation/lib/deploy.sh
 bash -n network-validation/lib/metrics.sh
 bash -n network-validation/lib/iperf.sh
+bash -n network-validation/lib/iperf3-collector.sh
 bash -n network-validation/lib/results.sh
 bash -n scripts/check-static.sh
 for test_script in "${test_scripts[@]}"; do
@@ -39,6 +40,7 @@ shellcheck -x \
   network-validation/lib/deploy.sh \
   network-validation/lib/metrics.sh \
   network-validation/lib/iperf.sh \
+  network-validation/lib/iperf3-collector.sh \
   network-validation/lib/results.sh \
   scripts/check-static.sh \
   "${test_scripts[@]}"

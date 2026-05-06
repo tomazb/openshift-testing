@@ -98,7 +98,7 @@ results_compute_verdict() {
       "$ARTIFACT_DIR/00-preflight/network-operator-gate.txt"
   fi
 
-  if [[ "$IPERF_PROTOCOL" == "udp" && "${CLUSTER_MTU:-unknown}" =~ ^[0-9]+$ ]] && (( IPERF_PACKET_SIZE > CLUSTER_MTU )); then
+  if [[ "$IPERF_PROTOCOL" == "udp" && "${IPERF_PACKET_SIZE:-}" =~ ^[0-9]+$ && "${CLUSTER_MTU:-unknown}" =~ ^[0-9]+$ ]] && (( IPERF_PACKET_SIZE > CLUSTER_MTU )); then
     results_add_risk_reason \
       "UDP packet size ${IPERF_PACKET_SIZE} exceeds captured cluster MTU ${CLUSTER_MTU}; throughput may include fragmentation effects" \
       "$ARTIFACT_DIR/00-preflight/network-baseline.env"

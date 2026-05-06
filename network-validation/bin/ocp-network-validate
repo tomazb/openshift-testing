@@ -75,14 +75,18 @@ IPERF_IMAGE="${IPERF_IMAGE:-ghcr.io/tomazb/openshift-testing/network-testing-ima
 IPERF_NAMESPACE="${IPERF_NAMESPACE:-network-validation}"
 IPERF_SERVER_NODE="${IPERF_SERVER_NODE:-}"
 IPERF_CLIENT_NODE="${IPERF_CLIENT_NODE:-}"
+IPERF_SERVER_ADDRESS="${IPERF_SERVER_ADDRESS:-}"
 IPERF_HOST_NETWORK="${IPERF_HOST_NETWORK:-false}"
+IPERF_PRIVILEGED_MODE="${IPERF_PRIVILEGED_MODE:-}"
 IPERF_DURATION="${IPERF_DURATION:-30}"
 IPERF_BANDWIDTH="${IPERF_BANDWIDTH:-0}"
-IPERF_PROTOCOL="${IPERF_PROTOCOL:-udp}"
-IPERF_PACKET_SIZE="${IPERF_PACKET_SIZE:-8972}"
+IPERF_PROTOCOL="${IPERF_PROTOCOL:-tcp}"
+IPERF_PACKET_SIZE="${IPERF_PACKET_SIZE:-auto}"
 IPERF_SOCKET_BUFFER="${IPERF_SOCKET_BUFFER:-256M}"
 IPERF_PARALLEL="${IPERF_PARALLEL:-1}"
 IPERF_PORT="${IPERF_PORT:-5201}"
+IPERF_INTERFACE="${IPERF_INTERFACE:-auto}"
+IPERF_SERVER_READY_TIMEOUT="${IPERF_SERVER_READY_TIMEOUT:-30}"
 IPERF_MIN_THROUGHPUT_GBPS="${IPERF_MIN_THROUGHPUT_GBPS:-0}"
 IPERF_MAX_LOSS_PERCENT="${IPERF_MAX_LOSS_PERCENT:-1}"
 IPERF_MAX_RETRANSMITS="${IPERF_MAX_RETRANSMITS:-0}"
@@ -103,14 +107,25 @@ validate_non_negative_number() {
   [[ "$value" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)$ ]] || config_error "$name must be a non-negative number"
 }
 
+validate_non_negative_integer() {
+  local name="$1" value="$2"
+  [[ "$value" =~ ^[0-9]+$ ]] || config_error "$name must be a non-negative integer"
+}
+
+validate_packet_size() {
+  local value="$1"
+  [[ "$value" == "auto" || "$value" =~ ^[1-9][0-9]*$ ]] || config_error "IPERF_PACKET_SIZE must be auto or a positive integer"
+}
+
 validate_config() {
   validate_positive_integer IPERF_DURATION "$IPERF_DURATION"
-  validate_positive_integer IPERF_PACKET_SIZE "$IPERF_PACKET_SIZE"
+  validate_packet_size "$IPERF_PACKET_SIZE"
   validate_positive_integer IPERF_PARALLEL "$IPERF_PARALLEL"
   validate_positive_integer IPERF_PORT "$IPERF_PORT"
+  validate_positive_integer IPERF_SERVER_READY_TIMEOUT "$IPERF_SERVER_READY_TIMEOUT"
   validate_non_negative_number IPERF_MIN_THROUGHPUT_GBPS "$IPERF_MIN_THROUGHPUT_GBPS"
   validate_non_negative_number IPERF_MAX_LOSS_PERCENT "$IPERF_MAX_LOSS_PERCENT"
-  validate_non_negative_number IPERF_MAX_RETRANSMITS "$IPERF_MAX_RETRANSMITS"
+  validate_non_negative_integer IPERF_MAX_RETRANSMITS "$IPERF_MAX_RETRANSMITS"
 
   case "$IPERF_PROTOCOL" in
     udp|tcp) ;;
@@ -120,6 +135,11 @@ validate_config() {
   case "$IPERF_HOST_NETWORK" in
     true|false) ;;
     *) config_error "IPERF_HOST_NETWORK must be true or false" ;;
+  esac
+
+  case "$IPERF_PRIVILEGED_MODE" in
+    ""|true|false) ;;
+    *) config_error "IPERF_PRIVILEGED_MODE must be true, false, or empty" ;;
   esac
 }
 

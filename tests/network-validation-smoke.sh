@@ -129,12 +129,28 @@ if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 -s -p 5201 
   exit 0
 fi
 
-if [[ "$args" == "-n network-validation exec iperf3-client -- iperf3"* ]]; then
+if [[ "$args" == "-n network-validation exec iperf3-client -- bash -c "*"/dev/tcp/"* ]]; then
+  echo "ready"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-server -- /opt/network-validation/iperf3-collector.sh "* ]]; then
+  echo "server collector complete"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-client -- /opt/network-validation/iperf3-collector.sh "* ]]; then
   if [[ "${FAKE_IPERF_CLIENT_FAIL:-false}" == "true" ]]; then
     echo "simulated iperf failure" >&2
     exit 7
   fi
-  cat <<'IPERFJSON'
+  echo "client collector complete"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-client -- cat /tmp/network-validation-client/iperf3_client.json" ]]; then
+  if [[ "${FAKE_IPERF_PROTOCOL:-tcp}" == "udp" ]]; then
+    cat <<'IPERFJSON'
 {
   "start": {},
   "end": {
@@ -149,6 +165,80 @@ if [[ "$args" == "-n network-validation exec iperf3-client -- iperf3"* ]]; then
   }
 }
 IPERFJSON
+  else
+    cat <<'IPERFJSON'
+{
+  "start": {},
+  "end": {
+    "sum_received": {
+      "bits_per_second": 2500000000,
+      "bytes": 1000,
+      "seconds": 5
+    },
+    "sum_sent": {
+      "retransmits": 0
+    }
+  }
+}
+IPERFJSON
+  fi
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-client -- cat /tmp/network-validation-client/iperf3_client.rc" ]]; then
+  echo "0"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-server -- cat /tmp/network-validation-server/iperf3_server.rc" ]]; then
+  echo "0"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-client -- cat /tmp/network-validation-client/"* ]] || \
+   [[ "$args" == "-n network-validation exec iperf3-server -- cat /tmp/network-validation-server/"* ]]; then
+  echo "artifact"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-client -- iperf3"* ]]; then
+  if [[ "${FAKE_IPERF_CLIENT_FAIL:-false}" == "true" ]]; then
+    echo "simulated iperf failure" >&2
+    exit 7
+  fi
+  if [[ "$args" == *" -u "* ]]; then
+    cat <<'IPERFJSON'
+{
+  "start": {},
+  "end": {
+    "sum": {
+      "bits_per_second": 9500000000,
+      "jitter_ms": 0.02,
+      "lost_percent": 0,
+      "packets": 100000,
+      "lost_packets": 0,
+      "seconds": 5
+    }
+  }
+}
+IPERFJSON
+  else
+    cat <<'IPERFJSON'
+{
+  "start": {},
+  "end": {
+    "sum_received": {
+      "bits_per_second": 2500000000,
+      "bytes": 1000,
+      "seconds": 5
+    },
+    "sum_sent": {
+      "retransmits": 0
+    }
+  }
+}
+IPERFJSON
+  fi
   exit 0
 fi
 
@@ -174,7 +264,6 @@ cat >"$CONFIG_FILE" <<EOF
 ARTIFACT_DIR="$ARTIFACT_DIR"
 IPERF_NAMESPACE="network-validation"
 IPERF_DURATION="5"
-IPERF_PROTOCOL="udp"
 EOF
 
 # --- Test 1: Config validation rejects bad values ---
@@ -195,6 +284,37 @@ if [[ "$rc" -eq 0 ]]; then
   exit 1
 fi
 grep -Fq "IPERF_DURATION must be a positive integer" "$TMP_DIR/bad.out"
+
+# --- Test 1b: TCP retransmit threshold must be an integer ---
+BAD_RETRANSMITS_CONFIG="$TMP_DIR/bad-retransmits.env"
+cat >"$BAD_RETRANSMITS_CONFIG" <<EOF
+ARTIFACT_DIR="$TMP_DIR/bad-retransmits-artifacts"
+IPERF_MAX_RETRANSMITS="0.5"
+EOF
+
+set +e
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$BAD_RETRANSMITS_CONFIG" init >"$TMP_DIR/bad-retransmits.out" 2>&1
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "decimal IPERF_MAX_RETRANSMITS should fail" >&2
+  exit 1
+fi
+grep -Fq "IPERF_MAX_RETRANSMITS must be a non-negative integer" "$TMP_DIR/bad-retransmits.out"
+
+# --- Test 1c: Collector option parsing rejects missing values clearly ---
+set +e
+bash "$REPO_ROOT/network-validation/lib/iperf3-collector.sh" --role >"$TMP_DIR/collector-missing-value.out" 2>&1
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "collector option missing a value should fail" >&2
+  exit 1
+fi
+grep -Fq "ERROR: --role requires a value" "$TMP_DIR/collector-missing-value.out"
 
 # --- Test 2: --config without a path fails ---
 set +e
@@ -231,12 +351,10 @@ grep -Fq "Available=True" "$ARTIFACT_DIR/00-preflight/network-operator-gate.txt"
 mkdir -p "$ARTIFACT_DIR/01-cross-node"
 cat >"$ARTIFACT_DIR/01-cross-node/iperf3_summary.txt" <<EOF
 status=ok
-protocol=udp
-throughput_gbps=9.5
-jitter_ms=0.02
-lost_percent=0
-packets=100000
-lost_packets=0
+protocol=tcp
+throughput_gbps=2.5
+retransmits=0
+bytes=1000
 duration=5
 EOF
 
@@ -245,7 +363,8 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 
 test -f "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Throughput: 9.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 
 # --- Test 6: Direct same-node action pins both pods to one node ---
 SAME_ARTIFACT_DIR="$TMP_DIR/same-node-artifacts"
@@ -262,11 +381,20 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 
 grep -Fq 'kubernetes.io/hostname: "node-a"' "$SAME_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq 'kubernetes.io/hostname: "node-a"' "$SAME_ARTIFACT_DIR/tmp/iperf3-client.yaml"
+grep -Fq "name: network-validation-collector" "$SAME_ARTIFACT_DIR/tmp/iperf3-server.yaml"
+grep -Fq "mountPath: /opt/network-validation" "$SAME_ARTIFACT_DIR/tmp/iperf3-client.yaml"
 
 # Runtime variables written for hyphenated scenarios must remain sourceable.
 # shellcheck disable=SC1091
 source "$SAME_ARTIFACT_DIR/runtime.env"
 grep -Fq "SAME_NODE_RESULT_DIR=" "$SAME_ARTIFACT_DIR/runtime.env"
+test -f "$SAME_ARTIFACT_DIR/02-same-node/client/iperf3_client.json"
+test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
+grep -Fq "ready-check" "$FAKE_OC_LOG"
+if grep -Fq "sleep 2" "$REPO_ROOT/network-validation/lib/iperf.sh"; then
+  echo "iperf server readiness must not use a fixed sleep 2" >&2
+  exit 1
+fi
 
 # --- Test 7: Pod-to-service uses a real artifact dir and valid Service ports ---
 SVC_ARTIFACT_DIR="$TMP_DIR/service-artifacts"
@@ -278,7 +406,7 @@ IPERF_DURATION="5"
 IPERF_PROTOCOL="udp"
 EOF
 
-env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" FAKE_IPERF_PROTOCOL="udp" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$SVC_CONFIG" pod-to-service
 
 test -f "$SVC_ARTIFACT_DIR/04-pod-to-service/iperf3_summary.txt"
@@ -314,3 +442,21 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$FAIL_CONFIG" report
 
 grep -Fq -- "- Verdict: Blocked" "$FAIL_ARTIFACT_DIR/06-report/network-validation-report.md"
+
+# --- Test 9: Host-network metrics can run in best-effort restricted mode ---
+BEST_EFFORT_ARTIFACT_DIR="$TMP_DIR/best-effort-artifacts"
+BEST_EFFORT_CONFIG="$TMP_DIR/best-effort.env"
+cat >"$BEST_EFFORT_CONFIG" <<EOF
+ARTIFACT_DIR="$BEST_EFFORT_ARTIFACT_DIR"
+IPERF_NAMESPACE="network-validation"
+IPERF_DURATION="5"
+IPERF_HOST_NETWORK="true"
+IPERF_PRIVILEGED_MODE="false"
+EOF
+
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$BEST_EFFORT_CONFIG" deploy
+
+grep -Fq "hostNetwork: true" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
+grep -Fq "hostPID: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
+grep -Fq "privileged: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"
