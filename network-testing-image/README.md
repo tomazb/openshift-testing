@@ -7,6 +7,7 @@ standalone debug image for OpenShift clusters.
 ## Registry
 
 ```text
+ghcr.io/tomazb/openshift-testing/network-testing-image
 ```
 
 | Tag | When published |
@@ -21,6 +22,7 @@ Builds for **linux/amd64** and **linux/arm64**.
 ## Tools
 
 ### Network testing
+
 | Tool | Source |
 |------|--------|
 | iperf3 3.21 | Built from source |
@@ -29,6 +31,7 @@ Builds for **linux/amd64** and **linux/arm64**.
 | fio 3.42 | Built from source |
 
 ### Network utilities
+
 | Tool | Source |
 |------|--------|
 | tcpdump | UBI9 |
@@ -41,6 +44,7 @@ Builds for **linux/amd64** and **linux/arm64**.
 | httpd-tools (`ab`) | UBI9 |
 
 ### Storage
+
 | Tool | Source |
 |------|--------|
 | lvm2 (`lvs`, `pvs`, `vgs`) | UBI9 |
@@ -49,11 +53,13 @@ Builds for **linux/amd64** and **linux/arm64**.
 | rclone v1.73.5 | Downloaded binary (sha256 verified) |
 
 ### Kubernetes / OpenShift
+
 | Tool | Source |
 |------|--------|
 | oc / kubectl 4.19.12 | Downloaded binary (sha256 verified) |
 
 ### Utilities
+
 | Tool | Source |
 |------|--------|
 | step-cli 0.30.2 | Downloaded binary (sha256 verified) |
