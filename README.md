@@ -16,7 +16,7 @@ podman pull ghcr.io/tomazb/openshift-testing/network-testing-image:latest
 
 Published tags include `latest`, `main`, `sha-<commit>`, and `network-testing-image-v*` release tags.
 
-The image uses UBI9 repositories first, enables EPEL9 for `netperf`, `qperf`, and `s3fs-fuse`, and source-builds `fio` from the official fio release tarball with a pinned SHA-256. External standalone tools such as `rclone`, `oc`, `kubectl`, `step`, `yq`, and `fio` are version-pinned and verified during the build.
+The image uses UBI9 repositories first, enables EPEL9 for `netperf`, `qperf`, and `s3fs-fuse`, and source-builds `iperf3` and `fio` from their official release tarballs with pinned SHA-256 checksums. `iperf3` is built from source (currently 3.21) rather than installed from UBI9 repos (which only provides the outdated 3.9) to gain modern performance features including parallel stream improvements, zero-copy sendfile, and GSO/GRO support. External standalone tools such as `rclone`, `oc`, `kubectl`, `step`, and `yq` are version-pinned and verified during the build.
 
 Some tools need extra pod permissions to be useful. Packet capture, low-level interface inspection, and `s3fs` mounts may require capabilities, device access, privileged security context settings, or cluster policy changes outside the image itself.
 
