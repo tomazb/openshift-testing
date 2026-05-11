@@ -10,17 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - iperf3 is now built from source (3.21) instead of being installed from the
-  UBI9 package repository (which provides only 3.9). Compiled in the existing
-  `fio-builder` stage with `--without-openssl`; the binary is copied into the
-  final image. Version pinned with a SHA256-verified tarball from the official
-  esnet/iperf GitHub release.
+  UBI9 package repository (which provides only 3.9). Compiled in the
+  `tools-builder` stage with `--without-openssl --disable-shared` (produces a
+  self-contained binary with no shared library runtime dependency). Version
+  pinned with a SHA256-verified tarball from the official esnet/iperf GitHub
+  release.
 
 ---
 
 ## [2026-05-02]
 
 ### Added
-- fio 3.42 compiled from source in a dedicated `fio-builder` multi-stage stage.
+- fio 3.42 compiled from source in a dedicated `tools-builder` multi-stage build.
   Build uses `--disable-native` for portable amd64/arm64 binaries. `libaio-devel`
   is intentionally omitted (unavailable in UBI9 repos); fio falls back to POSIX
   AIO and builds correctly without it.

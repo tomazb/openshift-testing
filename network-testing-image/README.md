@@ -6,8 +6,7 @@ standalone debug image for OpenShift clusters.
 
 ## Registry
 
-```
-ghcr.io/tomazb/openshift-testing/network-testing-image
+```text
 ```
 
 | Tag | When published |
@@ -142,6 +141,6 @@ Available `--build-arg` overrides:
 - The UBI9 base image is pinned to a specific version tag (not `:latest`).
 - All downloaded binaries are verified with SHA256 checksums before installation.
 - `iperf3` and `fio` are compiled from pinned, checksum-verified source tarballs
-  in a separate builder stage; no build tools are present in the final image.
+  in a separate `tools-builder` stage; no build tools are present in the final image.
 - Build provenance attestation is generated for every push via
   `actions/attest-build-provenance`.

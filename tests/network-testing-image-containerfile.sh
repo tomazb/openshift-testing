@@ -46,7 +46,7 @@ grep -Fxq "ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538
 grep -Fxq "ARG IPERF3_VERSION=3.21" "$CONTAINERFILE"
 grep -Fxq "ARG IPERF3_SHA256=656e4405ebd620121de7ceca3eaf43a88f79ea1b857d041a6a0b1314801acdd8" "$CONTAINERFILE"
 
-if grep -Eq "^[[:space:]]+iperf3[[:space:]]+\\\\$" "$CONTAINERFILE"; then
+if grep -Eq "^[[:space:]]+iperf3[[:space:]]*(\\\\)?$" "$CONTAINERFILE"; then
   echo "iperf3 must be built from source, not installed via dnf" >&2
   exit 1
 fi
@@ -60,8 +60,8 @@ grep -Fq "https://github.com/esnet/iperf/releases/download/\${IPERF3_VERSION}" "
 grep -Fq "sha256sum -c -" "$CONTAINERFILE"
 grep -Fq "./configure --prefix=/usr/local --disable-native" "$CONTAINERFILE"
 grep -Fq "./configure --prefix=/usr/local --without-openssl --disable-shared" "$CONTAINERFILE"
-grep -Fq "COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio" "$CONTAINERFILE"
-grep -Fq "COPY --from=fio-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3" "$CONTAINERFILE"
+grep -Fq "COPY --from=tools-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio" "$CONTAINERFILE"
+grep -Fq "COPY --from=tools-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3" "$CONTAINERFILE"
 # libaio-devel is intentionally omitted because it is unavailable in UBI 9
 # repositories; fio falls back to POSIX AIO and builds fine without it.
 grep -Fq "tar -xzf \"\${YQ_TARBALL}\"" "$CONTAINERFILE"

@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi:9.7 AS fio-builder
+FROM registry.access.redhat.com/ubi9/ubi:9.7 AS tools-builder
 
 ARG FIO_VERSION=3.42
 ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0
@@ -80,8 +80,8 @@ RUN dnf install -y "${EPEL_RELEASE_URL}" \
     s3fs-fuse \
     && dnf clean all
 
-COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio
-COPY --from=fio-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3
+COPY --from=tools-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio
+COPY --from=tools-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3
 
 RUN set -eux; \
     case "${TARGETARCH:-$(uname -m)}" in \
