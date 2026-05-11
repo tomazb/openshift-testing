@@ -727,6 +727,11 @@ render_results_summary_ci() {
 
 - CI summary: profile=${VALIDATION_PROFILE:-default}; verdict=$verdict; openshift-tests-rc=$dns_rc; dnsperf="$(results_dnsperf_summary)"; perf-tests="$(results_perf_tests_summary)"; deep-diagnostics="$(results_deep_diagnostics_summary)"; report="$report_path"
 EOF
+
+  if [[ "$verdict" != "$VERDICT_ACCEPTED" ]]; then
+    echo
+    render_dns_validation_verdict
+  fi
 }
 
 render_results_summary() {

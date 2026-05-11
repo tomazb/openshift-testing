@@ -299,6 +299,9 @@ PATH="$FAKE_BIN:$PATH" bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --c
 
 grep -Fq "Profile: ci" "$REPORT"
 grep -Fq -- "- CI summary: profile=ci;" "$REPORT"
+grep -Fq "## DNS validation verdict" "$REPORT"
+grep -Fq -- "- Blocking reasons:" "$REPORT"
+grep -Fq "Selected DNS conformance tests failed: failed=1" "$REPORT"
 if grep -Fq "## DNS conformance details" "$REPORT"; then
   echo "ci report should not render detailed DNS conformance sections" >&2
   exit 1
