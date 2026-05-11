@@ -12,7 +12,12 @@ PROFILE_NAME=""
 RESOLVED_PROFILE="default"
 ACTION="menu"
 ACTION_ARGS=()
-export AUTO_YES="false"
+declare -A CALLER_ENV_VARS=()
+while IFS='=' read -r name _; do
+  CALLER_ENV_VARS["$name"]=1
+done < <(env)
+AUTO_YES="${AUTO_YES:-false}"
+export AUTO_YES
 
 usage() {
   cat <<USAGE
@@ -48,14 +53,22 @@ USAGE
 }
 
 profile_names() {
-  printf 'default day1 day2 ci customer-evidence'
+  local profile_dir="$PROJECT_DIR/config/profiles"
+  local file name names=()
+
+  for file in "$profile_dir"/*.env; do
+    [[ -e "$file" ]] || continue
+    name="$(basename "$file" .env)"
+    names+=("$name")
+  done
+
+  (IFS=' '; printf '%s' "${names[*]}")
 }
 
 is_valid_profile() {
-  case "$1" in
-    default|day1|day2|ci|customer-evidence) return 0 ;;
-    *) return 1 ;;
-  esac
+  local profile="$1"
+  [[ "$profile" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  [[ -f "$PROJECT_DIR/config/profiles/$profile.env" ]]
 }
 
 read_config_profile() {
@@ -77,8 +90,45 @@ source_profile_file() {
   source "$file"
 }
 
+profile_variable_names() {
+  local file="$1" line
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+    fi
+  done <"$file"
+}
+
+capture_profile_overrides() {
+  local profile_dir="$1" file var
+  # shellcheck disable=SC2178
+  local -n overrides="$2"
+
+  for file in "$profile_dir"/*.env; do
+    [[ -e "$file" ]] || continue
+    while IFS= read -r var; do
+      if [[ ${CALLER_ENV_VARS[$var]+x} && ${!var+x} ]]; then
+        overrides["$var"]="${!var}"
+      fi
+    done < <(profile_variable_names "$file")
+  done
+}
+
+restore_profile_overrides() {
+  local var
+  # shellcheck disable=SC2178
+  local -n overrides="$1"
+
+  for var in "${!overrides[@]}"; do
+    printf -v "$var" '%s' "${overrides[$var]}"
+  done
+}
+
 load_validation_profile() {
   local config_profile="" profile_dir default_profile profile_file
+  # shellcheck disable=SC2034
+  local -A caller_overrides=()
 
   if [[ -z "$PROFILE_NAME" && -z "${DNS_VALIDATION_PROFILE:-}" ]]; then
     config_profile="$(read_config_profile "$CONFIG_FILE")"
@@ -94,12 +144,14 @@ load_validation_profile() {
 
   profile_dir="$PROJECT_DIR/config/profiles"
   default_profile="$profile_dir/default.env"
+  capture_profile_overrides "$profile_dir" caller_overrides
   source_profile_file "$default_profile" "default"
 
   if [[ "$RESOLVED_PROFILE" != "default" ]]; then
     profile_file="$profile_dir/$RESOLVED_PROFILE.env"
     source_profile_file "$profile_file" "$RESOLVED_PROFILE"
   fi
+  restore_profile_overrides caller_overrides
 }
 
 while [[ $# -gt 0 ]]; do

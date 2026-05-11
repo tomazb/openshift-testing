@@ -76,6 +76,20 @@ grep -Fq "Initialization complete" "$TMP_DIR/override.out"
 grep -Fxq "VALIDATION_PROFILE=day1" "$ARTIFACT_DIR/run-info.txt"
 grep -Fxq "DNSPERF_DURATION_SECONDS=999" "$ARTIFACT_DIR/run-info.txt"
 
+CONFIG_FILE="$TMP_DIR/env-override.env"
+ARTIFACT_DIR="$TMP_DIR/env-override-artifacts"
+write_config "$CONFIG_FILE" "$ARTIFACT_DIR"
+DNSPERF_DURATION_SECONDS=999 DNSPERF_QPS_STEPS="42 84" run_init "$CONFIG_FILE" --profile day1 >"$TMP_DIR/env-override.out"
+grep -Fq "Initialization complete" "$TMP_DIR/env-override.out"
+grep -Fxq "VALIDATION_PROFILE=day1" "$ARTIFACT_DIR/run-info.txt"
+grep -Fxq "DNSPERF_DURATION_SECONDS=999" "$ARTIFACT_DIR/run-info.txt"
+(
+  set -Eeuo pipefail
+  # shellcheck disable=SC1091
+  source "$ARTIFACT_DIR/run-info.txt"
+  [[ "$DNSPERF_QPS_STEPS" == "42 84" ]]
+)
+
 CONFIG_FILE="$TMP_DIR/precedence.env"
 ARTIFACT_DIR="$TMP_DIR/precedence-artifacts"
 write_config "$CONFIG_FILE" "$ARTIFACT_DIR"
