@@ -179,9 +179,13 @@ collect_posttest() {
 }
 
 cleanup() {
-  [[ -n "${IPERF_PID:-}" ]] && kill "$IPERF_PID" 2>/dev/null || true
-  [[ -n "${METRIC_PID:-}" ]] && kill "$METRIC_PID" 2>/dev/null || true
-  [[ -n "${METRIC_PID:-}" ]] && wait "$METRIC_PID" 2>/dev/null || true
+  if [[ -n "${IPERF_PID:-}" ]]; then
+    kill "$IPERF_PID" 2>/dev/null || true
+  fi
+  if [[ -n "${METRIC_PID:-}" ]]; then
+    kill "$METRIC_PID" 2>/dev/null || true
+    wait "$METRIC_PID" 2>/dev/null || true
+  fi
   collect_posttest 2>/dev/null || true
 }
 
