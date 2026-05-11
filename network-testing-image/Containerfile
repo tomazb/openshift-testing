@@ -34,7 +34,7 @@ RUN set -eux; \
     mkdir -p /tmp/iperf3-src; \
     tar -xzf "${IPERF3_TARBALL}" -C /tmp/iperf3-src --strip-components=1; \
     cd /tmp/iperf3-src; \
-    ./configure --prefix=/usr/local --without-openssl; \
+    ./configure --prefix=/usr/local --without-openssl --disable-shared; \
     make -j"$(nproc)"; \
     make install DESTDIR=/tmp/iperf3-out; \
     /tmp/iperf3-out/usr/local/bin/iperf3 --version | grep -F "${IPERF3_VERSION}"

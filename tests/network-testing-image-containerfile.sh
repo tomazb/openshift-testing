@@ -59,7 +59,7 @@ grep -Fq "https://brick.kernel.dk/snaps/\${FIO_TARBALL}" "$CONTAINERFILE"
 grep -Fq "https://github.com/esnet/iperf/releases/download/\${IPERF3_VERSION}" "$CONTAINERFILE"
 grep -Fq "sha256sum -c -" "$CONTAINERFILE"
 grep -Fq "./configure --prefix=/usr/local --disable-native" "$CONTAINERFILE"
-grep -Fq "./configure --prefix=/usr/local --without-openssl" "$CONTAINERFILE"
+grep -Fq "./configure --prefix=/usr/local --without-openssl --disable-shared" "$CONTAINERFILE"
 grep -Fq "COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio" "$CONTAINERFILE"
 grep -Fq "COPY --from=fio-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3" "$CONTAINERFILE"
 # libaio-devel is intentionally omitted because it is unavailable in UBI 9
