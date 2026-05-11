@@ -11,6 +11,14 @@ bash -n dns-validation/lib/common.sh
 bash -n dns-validation/lib/cluster.sh
 bash -n dns-validation/lib/perf.sh
 bash -n dns-validation/lib/results.sh
+bash -n network-validation/bin/ocp-network-validate
+bash -n network-validation/lib/common.sh
+bash -n network-validation/lib/cluster.sh
+bash -n network-validation/lib/deploy.sh
+bash -n network-validation/lib/metrics.sh
+bash -n network-validation/lib/iperf.sh
+bash -n network-validation/lib/iperf3-collector.sh
+bash -n network-validation/lib/results.sh
 bash -n scripts/check-static.sh
 for test_script in "${test_scripts[@]}"; do
   bash -n "$test_script"
@@ -26,6 +34,14 @@ shellcheck -x \
   dns-validation/lib/cluster.sh \
   dns-validation/lib/perf.sh \
   dns-validation/lib/results.sh \
+  network-validation/bin/ocp-network-validate \
+  network-validation/lib/common.sh \
+  network-validation/lib/cluster.sh \
+  network-validation/lib/deploy.sh \
+  network-validation/lib/metrics.sh \
+  network-validation/lib/iperf.sh \
+  network-validation/lib/iperf3-collector.sh \
+  network-validation/lib/results.sh \
   scripts/check-static.sh \
   "${test_scripts[@]}"
 
