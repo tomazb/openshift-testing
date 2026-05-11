@@ -2,6 +2,8 @@ FROM registry.access.redhat.com/ubi9/ubi:9.7 AS fio-builder
 
 ARG FIO_VERSION=3.42
 ARG FIO_SHA256=9128d0c81bd7bffab0dd06cbfb755a05ef92f3b8a0b0c61f1b3538df6750f1e0
+ARG IPERF3_VERSION=3.21
+ARG IPERF3_SHA256=656e4405ebd620121de7ceca3eaf43a88f79ea1b857d041a6a0b1314801acdd8
 
 # libaio-devel is unavailable from the configured UBI9 repositories; fio still
 # builds with the I/O engines available in the base image.
@@ -25,6 +27,18 @@ RUN set -eux; \
     make install DESTDIR=/tmp/fio-out; \
     /tmp/fio-out/usr/local/bin/fio --version | grep -F "fio-${FIO_VERSION}"
 
+RUN set -eux; \
+    IPERF3_TARBALL="iperf-${IPERF3_VERSION}.tar.gz"; \
+    curl -fsSLo "${IPERF3_TARBALL}" "https://github.com/esnet/iperf/releases/download/${IPERF3_VERSION}/${IPERF3_TARBALL}"; \
+    echo "${IPERF3_SHA256}  ${IPERF3_TARBALL}" | sha256sum -c -; \
+    mkdir -p /tmp/iperf3-src; \
+    tar -xzf "${IPERF3_TARBALL}" -C /tmp/iperf3-src --strip-components=1; \
+    cd /tmp/iperf3-src; \
+    ./configure --prefix=/usr/local --without-openssl; \
+    make -j"$(nproc)"; \
+    make install DESTDIR=/tmp/iperf3-out; \
+    /tmp/iperf3-out/usr/local/bin/iperf3 --version | grep -F "${IPERF3_VERSION}"
+
 FROM registry.access.redhat.com/ubi9/ubi:9.7
 
 LABEL org.opencontainers.image.source="https://github.com/tomazb/openshift-testing" \
@@ -45,7 +59,6 @@ RUN dnf install -y \
     iproute \
     iputils \
     mtr \
-    iperf3 \
     rsync \
     wget \
     unzip \
@@ -68,6 +81,7 @@ RUN dnf install -y "${EPEL_RELEASE_URL}" \
     && dnf clean all
 
 COPY --from=fio-builder /tmp/fio-out/usr/local/bin/fio /usr/local/bin/fio
+COPY --from=fio-builder /tmp/iperf3-out/usr/local/bin/iperf3 /usr/local/bin/iperf3
 
 RUN set -eux; \
     case "${TARGETARCH:-$(uname -m)}" in \
