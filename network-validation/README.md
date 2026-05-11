@@ -63,7 +63,7 @@ TCP is the recommended baseline profile. Use `IPERF_PROTOCOL=udp` when the goal 
 
 Each run creates a timestamped directory under `runs/`:
 
-```
+```text
 runs/<timestamp>/
   00-preflight/       — cluster and network baseline
   01-cross-node/      — cross-node test results and metrics

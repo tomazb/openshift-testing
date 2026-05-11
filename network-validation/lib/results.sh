@@ -218,8 +218,8 @@ Generated: $(date -Iseconds)
 - Cluster CIDR: \`${CLUSTER_CIDR:-unknown}\`
 - Service CIDR: \`${SERVICE_CIDR:-unknown}\`
 - Node count: \`${NODE_COUNT:-unknown}\`
-- Server node: \`${IPERF_SERVER_NODE:-unknown}\`
-- Client node: \`${IPERF_CLIENT_NODE:-unknown}\`
+- Server node: \`${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-unknown}}\`
+- Client node: \`${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-unknown}}\`
 
 ## Network operator gate
 

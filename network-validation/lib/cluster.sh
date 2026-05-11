@@ -113,33 +113,63 @@ ovn_diagnostics() {
   run_out "$d/ovn-daemonsets.txt" oc -n openshift-ovn-kubernetes get daemonsets -o wide
   run_out "$d/ovn-events.txt" oc -n openshift-ovn-kubernetes get events --sort-by=.metadata.creationTimestamp
 
-  # Collect logs and OVN DB state from ovnkube-node pods
-  local pod_file="$d/ovnkube-node-pods.txt"
-  if run_out_checked "$pod_file" oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
-    local pod
-    while IFS= read -r pod; do
-      [[ -n "$pod" ]] || continue
-
-      # Logs from all containers (tail to keep artifacts manageable)
-      run_out "$d/${pod}-logs.txt" oc -n openshift-ovn-kubernetes logs "$pod" --all-containers --tail=500 || rc=1
-
-      # OVN NB/SB show (via nbdb container)
-      run_out "$d/${pod}-nbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c nbdb -- ovn-nbctl show || rc=1
-      run_out "$d/${pod}-sbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c sbdb -- ovn-sbctl show || rc=1
-
-      # GenEve tunnel and OVN management port stats
-      run_out "$d/${pod}-geneve-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show genev_sys_6081 || rc=1
-      run_out "$d/${pod}-ovn-mp0-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show ovn-k8s-mp0 || rc=1
-
-      # OVN flow counts
-      run_out "$d/${pod}-flow-count.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ovs-ofctl dump-aggregate br-int || rc=1
-
-      # Only collect from the first ovnkube-node pod to limit artifact size; NB/SB are cluster-wide.
-      break
-    done <"$pod_file"
+  local control_plane_pod_file="$d/ovnkube-control-plane-pods.txt"
+  if run_out_checked "$control_plane_pod_file" oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-control-plane -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
+    local control_plane_pod
+    control_plane_pod="$(awk 'NF {print; exit}' "$control_plane_pod_file")"
+    if [[ -n "$control_plane_pod" ]]; then
+      run_out "$d/${control_plane_pod}-logs.txt" oc -n openshift-ovn-kubernetes logs "$control_plane_pod" --all-containers --tail=500 || rc=1
+      run_out "$d/${control_plane_pod}-nbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$control_plane_pod" -c nbdb -- ovn-nbctl show || rc=1
+      run_out "$d/${control_plane_pod}-sbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$control_plane_pod" -c sbdb -- ovn-sbctl show || rc=1
+    else
+      warn "No ovnkube-control-plane pod found for OVN database diagnostics."
+      rc=1
+    fi
   else
     rc=1
   fi
+
+  local participant_nodes=()
+  if [[ -n "${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-}}" ]]; then
+    participant_nodes+=("${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-}}")
+  fi
+  if [[ -n "${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}" && "${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}" != "${participant_nodes[0]:-}" ]]; then
+    participant_nodes+=("${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}")
+  fi
+
+  local node_pod_file="$d/ovnkube-node-pods.txt"
+  : > "$node_pod_file"
+  if [[ ${#participant_nodes[@]} -gt 0 ]]; then
+    local node node_pod
+    for node in "${participant_nodes[@]}"; do
+      node_pod="$(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node --field-selector "spec.nodeName=$node" -o 'jsonpath={.items[0].metadata.name}' 2>/dev/null || true)"
+      if [[ -z "$node_pod" ]]; then
+        warn "No ovnkube-node pod found on participant node $node."
+        rc=1
+        continue
+      fi
+      printf '%s %s\n' "$node" "$node_pod" >> "$node_pod_file"
+    done
+  else
+    warn "No deployed participant nodes available; falling back to the first ovnkube-node pod."
+    if run_out_checked "$node_pod_file" oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
+      local first_node_pod
+      first_node_pod="$(awk 'NF {print; exit}' "$node_pod_file")"
+      printf 'unknown-node %s\n' "$first_node_pod" > "$node_pod_file"
+    else
+      rc=1
+    fi
+  fi
+
+  local node_label pod
+  while read -r node_label pod; do
+    [[ -n "$node_label" && -n "${pod:-}" ]] || continue
+
+    run_out "$d/${node_label}-${pod}-logs.txt" oc -n openshift-ovn-kubernetes logs "$pod" --all-containers --tail=500 || rc=1
+    run_out "$d/${node_label}-${pod}-geneve-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show genev_sys_6081 || rc=1
+    run_out "$d/${node_label}-${pod}-ovn-mp0-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show ovn-k8s-mp0 || rc=1
+    run_out "$d/${node_label}-${pod}-flow-count.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ovs-ofctl dump-aggregate br-int || rc=1
+  done <"$node_pod_file"
 
   echo "$rc" >"$d/ovn-diagnostics.rc"
   if [[ "$rc" -eq 0 ]]; then

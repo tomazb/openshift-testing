@@ -29,7 +29,8 @@ case "$args" in
   "get network.operator/cluster -o yaml"|\
   "describe clusteroperator/network"|\
   "-n openshift-ovn-kubernetes get pods -o wide"|\
-  "-n openshift-ovn-kubernetes get daemonsets -o wide")
+  "-n openshift-ovn-kubernetes get daemonsets -o wide"|\
+  "-n openshift-ovn-kubernetes get events --sort-by=.metadata.creationTimestamp")
     echo "ok"
     exit 0
     ;;
@@ -121,6 +122,27 @@ fi
 
 if [[ "$args" == "-n network-validation get svc iperf3-server -o jsonpath={.spec.clusterIP}" ]]; then
   echo "172.30.99.99"
+  exit 0
+fi
+
+if [[ "$args" == "-n openshift-ovn-kubernetes get pods -l app=ovnkube-control-plane -o jsonpath="* ]]; then
+  echo "ovnkube-control-plane-a"
+  exit 0
+fi
+
+if [[ "$args" == "-n openshift-ovn-kubernetes get pods -l app=ovnkube-node --field-selector spec.nodeName=node-a -o jsonpath={.items[0].metadata.name}" ]]; then
+  echo "ovnkube-node-a"
+  exit 0
+fi
+
+if [[ "$args" == "-n openshift-ovn-kubernetes get pods -l app=ovnkube-node --field-selector spec.nodeName=node-b -o jsonpath={.items[0].metadata.name}" ]]; then
+  echo "ovnkube-node-b"
+  exit 0
+fi
+
+if [[ "$args" == "-n openshift-ovn-kubernetes logs "* ]] || \
+   [[ "$args" == "-n openshift-ovn-kubernetes exec "* ]]; then
+  echo "ok"
   exit 0
 fi
 
@@ -347,6 +369,19 @@ test -f "$ARTIFACT_DIR/00-preflight/network-operator-gate.txt"
 grep -Fq "Available=True" "$ARTIFACT_DIR/00-preflight/network-operator-gate.txt"
 
 # --- Test 5: Report generates with Accepted verdict (when preflight is healthy) ---
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" deploy
+
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" ovn-diagnostics
+
+test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-control-plane-a-nbctl-show.txt"
+test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
+test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
+grep -Fq "ovnkube-control-plane-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
+grep -Fq "ovnkube-node --field-selector spec.nodeName=node-a" "$FAKE_OC_LOG"
+grep -Fq "ovnkube-node --field-selector spec.nodeName=node-b" "$FAKE_OC_LOG"
+
 # Write a fake cross-node result so verdict can evaluate
 mkdir -p "$ARTIFACT_DIR/01-cross-node"
 cat >"$ARTIFACT_DIR/01-cross-node/iperf3_summary.txt" <<EOF
@@ -365,6 +400,8 @@ test -f "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 
 # --- Test 6: Direct same-node action pins both pods to one node ---
 SAME_ARTIFACT_DIR="$TMP_DIR/same-node-artifacts"
@@ -385,16 +422,17 @@ grep -Fq "name: network-validation-collector" "$SAME_ARTIFACT_DIR/tmp/iperf3-ser
 grep -Fq "mountPath: /opt/network-validation" "$SAME_ARTIFACT_DIR/tmp/iperf3-client.yaml"
 
 # Runtime variables written for hyphenated scenarios must remain sourceable.
-# shellcheck disable=SC1091
-source "$SAME_ARTIFACT_DIR/runtime.env"
-grep -Fq "SAME_NODE_RESULT_DIR=" "$SAME_ARTIFACT_DIR/runtime.env"
+(
+  # shellcheck disable=SC1091
+  source "$SAME_ARTIFACT_DIR/runtime.env"
+  [[ -n "${SAME_NODE_RESULT_DIR:-}" ]]
+)
 test -f "$SAME_ARTIFACT_DIR/02-same-node/client/iperf3_client.json"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
+test -f "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
+grep -Fq "ready" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
 grep -Fq "ready-check" "$FAKE_OC_LOG"
-if grep -Fq "sleep 2" "$REPO_ROOT/network-validation/lib/iperf.sh"; then
-  echo "iperf server readiness must not use a fixed sleep 2" >&2
-  exit 1
-fi
+grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"
 
 # --- Test 7: Pod-to-service uses a real artifact dir and valid Service ports ---
 SVC_ARTIFACT_DIR="$TMP_DIR/service-artifacts"
@@ -412,9 +450,11 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" FAKE_IPERF_PROTOCO
 test -f "$SVC_ARTIFACT_DIR/04-pod-to-service/iperf3_summary.txt"
 grep -Fq "name: tcp" "$SVC_ARTIFACT_DIR/tmp/iperf3-service.yaml"
 grep -Fq "name: udp" "$SVC_ARTIFACT_DIR/tmp/iperf3-service.yaml"
-# shellcheck disable=SC1091
-source "$SVC_ARTIFACT_DIR/runtime.env"
-grep -Fq "POD_TO_SERVICE_RESULT_DIR=" "$SVC_ARTIFACT_DIR/runtime.env"
+(
+  # shellcheck disable=SC1091
+  source "$SVC_ARTIFACT_DIR/runtime.env"
+  [[ -n "${POD_TO_SERVICE_RESULT_DIR:-}" ]]
+)
 
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$SVC_CONFIG" report
