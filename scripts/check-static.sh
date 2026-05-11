@@ -28,6 +28,12 @@ for test_script in "${test_scripts[@]}"; do
   bash "$test_script"
 done
 
+# shellcheck disable=SC2016
+if ! grep -Fq '"${profile_files[@]}"' scripts/check-static.sh; then
+  echo "shellcheck must include DNS validation profile files" >&2
+  exit 1
+fi
+
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
   dns-validation/lib/common.sh \
@@ -35,6 +41,7 @@ shellcheck -x \
   dns-validation/lib/perf.sh \
   dns-validation/lib/results.sh \
   scripts/check-static.sh \
+  "${profile_files[@]}" \
   "${test_scripts[@]}"
 
 # shellcheck disable=SC2016
