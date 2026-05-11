@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Cluster baseline and openshift-tests actions.
 
+write_run_info_kv() {
+  local key="$1" value="${2-}"
+  printf '%s=%q\n' "$key" "$value"
+}
+
 init_action() {
   init_dirs
   require_cmd oc
@@ -9,12 +14,24 @@ init_action() {
   require_cmd sort
   run_out "$ARTIFACT_DIR/00-preflight/oc-version.txt" oc version
   run_out "$ARTIFACT_DIR/00-preflight/whoami.txt" oc whoami
-  cat >"$ARTIFACT_DIR/run-info.txt" <<EOF
-RUN_ID=$RUN_ID
-ARTIFACT_DIR=$ARTIFACT_DIR
-CONFIG_FILE=$CONFIG_FILE
-VALIDATION_NAMESPACE=$VALIDATION_NAMESPACE
-EOF
+  {
+    write_run_info_kv RUN_ID "$RUN_ID"
+    write_run_info_kv ARTIFACT_DIR "$ARTIFACT_DIR"
+    write_run_info_kv CONFIG_FILE "$CONFIG_FILE"
+    write_run_info_kv VALIDATION_NAMESPACE "$VALIDATION_NAMESPACE"
+    write_run_info_kv VALIDATION_PROFILE "${VALIDATION_PROFILE:-default}"
+    write_run_info_kv AUTO_YES "${AUTO_YES:-false}"
+    write_run_info_kv INCLUDE_SERIAL_DNS_TESTS "${INCLUDE_SERIAL_DNS_TESTS:-false}"
+    write_run_info_kv DNS_TEST_EXCLUDE_REGEX "${DNS_TEST_EXCLUDE_REGEX:-}"
+    write_run_info_kv DNSPERF_QPS_STEPS "${DNSPERF_QPS_STEPS:-100 500 1000 2000}"
+    write_run_info_kv DNSPERF_DURATION_SECONDS "${DNSPERF_DURATION_SECONDS:-60}"
+    write_run_info_kv DNSPERF_CLIENTS "${DNSPERF_CLIENTS:-5}"
+    write_run_info_kv DNSPERF_THREADS "${DNSPERF_THREADS:-2}"
+    write_run_info_kv DNSPERF_MAX_LOST_PERCENT "${DNSPERF_MAX_LOST_PERCENT:-}"
+    write_run_info_kv DNSPERF_MAX_AVG_LATENCY_SECONDS "${DNSPERF_MAX_AVG_LATENCY_SECONDS:-}"
+    write_run_info_kv DNS_VALIDATION_REPORT_MODE "${DNS_VALIDATION_REPORT_MODE:-full}"
+    write_run_info_kv DNS_VALIDATION_DEEP_DIAGNOSTICS "${DNS_VALIDATION_DEEP_DIAGNOSTICS:-on-risk}"
+  } >"$ARTIFACT_DIR/run-info.txt"
   log "Initialization complete. Artifacts: $ARTIFACT_DIR"
 }
 

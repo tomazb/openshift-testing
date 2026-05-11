@@ -5,6 +5,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 test_scripts=(tests/*.sh)
+profile_files=(dns-validation/config/profiles/*.env)
 
 bash -n dns-validation/bin/ocp-dns-validate
 bash -n dns-validation/lib/common.sh
@@ -20,6 +21,13 @@ bash -n network-validation/lib/iperf.sh
 bash -n network-validation/lib/iperf3-collector.sh
 bash -n network-validation/lib/results.sh
 bash -n scripts/check-static.sh
+if [[ ! -e "${profile_files[0]}" ]]; then
+  echo "no DNS validation profile files found" >&2
+  exit 1
+fi
+for profile_file in "${profile_files[@]}"; do
+  bash -n "$profile_file"
+done
 for test_script in "${test_scripts[@]}"; do
   bash -n "$test_script"
 done
@@ -27,6 +35,12 @@ done
 for test_script in "${test_scripts[@]}"; do
   bash "$test_script"
 done
+
+# shellcheck disable=SC2016
+if ! grep -Fq '"${profile_files[@]}"' scripts/check-static.sh; then
+  echo "shellcheck must include DNS validation profile files" >&2
+  exit 1
+fi
 
 shellcheck -x \
   dns-validation/bin/ocp-dns-validate \
@@ -43,6 +57,7 @@ shellcheck -x \
   network-validation/lib/iperf3-collector.sh \
   network-validation/lib/results.sh \
   scripts/check-static.sh \
+  "${profile_files[@]}" \
   "${test_scripts[@]}"
 
 # shellcheck disable=SC2016
