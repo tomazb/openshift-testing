@@ -130,11 +130,13 @@ ovn_diagnostics() {
   fi
 
   local participant_nodes=()
-  if [[ -n "${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-}}" ]]; then
-    participant_nodes+=("${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-}}")
+  local iperf_server_resolved="${DEPLOYED_IPERF_SERVER_NODE:-${IPERF_SERVER_NODE:-}}"
+  local iperf_client_resolved="${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}"
+  if [[ -n "$iperf_server_resolved" ]]; then
+    participant_nodes+=("$iperf_server_resolved")
   fi
-  if [[ -n "${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}" && "${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}" != "${participant_nodes[0]:-}" ]]; then
-    participant_nodes+=("${DEPLOYED_IPERF_CLIENT_NODE:-${IPERF_CLIENT_NODE:-}}")
+  if [[ -n "$iperf_client_resolved" && "$iperf_client_resolved" != "${participant_nodes[0]:-}" ]]; then
+    participant_nodes+=("$iperf_client_resolved")
   fi
 
   local node_pod_file="$d/ovnkube-node-pods.txt"
