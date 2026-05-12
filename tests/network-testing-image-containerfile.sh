@@ -13,6 +13,7 @@ for package in \
   bind-utils \
   httpd-tools \
   jq \
+  lsof \
   nmap \
   ethtool \
   netperf \

@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `lsof` installed from UBI9 base repos for socket and file-descriptor inspection.
+
 ### Changed
 - iperf3 is now built from source (3.21) instead of being installed from the
   UBI9 package repository (which provides only 3.9). Compiled in the

@@ -69,6 +69,7 @@ RUN dnf install -y \
     bind-utils \
     httpd-tools \
     jq \
+    lsof \
     nmap \
     ethtool \
     && dnf clean all
