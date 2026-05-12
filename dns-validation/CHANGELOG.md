@@ -11,6 +11,10 @@ This project has not been tagged yet, so entries are grouped by commit date.
 - Added non-interactive `run-single-test <test name>` support while keeping the existing interactive prompt fallback.
 - Added startup validation for DNS validation configuration values, including positive integer fields, QPS lists, optional numeric dnsperf thresholds, boolean flags, and supported perf-tests modes.
 - Added regression coverage for config validation, non-interactive single-test execution, and missing dnsperf log handling during threshold checks.
+- Documented kubeconfig context management: new "Targeting a cluster" section with `oc config use-context` and `oc whoami` guidance.
+- Added "Interpreting results" guide explaining common benign `Accepted with risks` risk flags and escalation criteria for genuine DNS problems.
+- Clarified non-interactive usage: added `--yes` to the recommended `all` example and documented the `AUTO_YES` env var.
+- Added note about the PodSecurity admission warning on the dnsperf pod (warning only; pod runs successfully).
 
 ### Changed
 

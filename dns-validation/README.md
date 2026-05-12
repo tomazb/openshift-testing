@@ -66,12 +66,31 @@ DNS_VALIDATION_PROFILE=ci bash bin/ocp-dns-validate --config config/validation.e
 echo 'VALIDATION_PROFILE="day2"' >> config/validation.env
 ```
 
+## Targeting a cluster
+
+The tool uses whichever `oc` context is currently active. Before running, confirm you are pointing at the right cluster:
+
+```bash
+oc config use-context <context-name>
+oc whoami
+```
+
+To switch context without changing the kubeconfig default, set the context first and verify:
+
+```bash
+oc config use-context ocp1htz1
+oc whoami   # should return your identity on that cluster
+bash bin/ocp-dns-validate --yes all
+```
+
 ## Non-interactive run
 
 ```bash
 cd dns-validation
-bash bin/ocp-dns-validate --config config/validation.env all
+bash bin/ocp-dns-validate --config config/validation.env --yes all
 ```
+
+The `--yes` flag (or `AUTO_YES=true`) suppresses interactive confirmation prompts and is required for unattended runs. Without it the `cleanup` action will block waiting for input.
 
 Individual steps are also available:
 
@@ -122,6 +141,13 @@ DNSPERF_MAX_AVG_LATENCY_SECONDS="0.005"
 
 Leave these values empty to use only the dnsperf command return code per QPS step.
 
+> **Note — PodSecurity admission warning:** The dnsperf pod generates a PodSecurity admission
+> warning about missing security context settings (`allowPrivilegeEscalation`, `runAsNonRoot`,
+> `seccompProfile`). This is a warning only — the `dns-validation` namespace uses a baseline
+> admission policy and the pod still runs and collects results successfully. For regulated
+> environments, supply a `DNSPERF_IMAGE` from an approved internal registry and bind the
+> namespace service account to the appropriate SCC before running dnsperf.
+
 ## Artifacts
 
 Each run writes artifacts under `runs/<timestamp>/` unless `ARTIFACT_DIR` is explicitly configured.
@@ -143,6 +169,24 @@ The generated report is:
 ```text
 runs/<timestamp>/05-report/dns-validation-report.md
 ```
+
+## Interpreting results
+
+The tool verdict is intentionally conservative. `Accepted with risks` does not mean DNS is broken — it means the run produced something worth human review. The table below covers the four most common benign risk flags and when they would warrant action.
+
+| Risk flag | Why it appears | When to worry |
+|---|---|---|
+| `openshift-tests rc=1` (no test failures) | `openshift-tests` exits with rc=1 whenever any test outcome is not `passed`, including normal platform skips | Only if `failed=N` where N > 0 in `01-openshift-tests/dns-summary.txt` |
+| Skipped tests: platform guards | Tests tagged `[Provider:GCE]`, `[Feature:Windows]`, etc. skip immediately on non-matching clusters | Only if tests you expect to run are skipping unexpectedly — check `01-openshift-tests/dns-tests.txt` for context |
+| DNS conformance tests excluded | Tests matched by `DNS_TEST_EXCLUDE_REGEX` were intentionally removed from the run | Review `01-openshift-tests/dns-tests.excluded.txt`; adjust the regex if critical tests are excluded unintentionally |
+| Optional perf-tests not run | `perf-tests` is opt-in and not part of the `all` sequence | Run the `perf-tests` action separately if an extended performance profile is required |
+
+**Signs of a genuine problem** (escalate to `Blocked` or investigate further):
+
+- `failed=N` where N > 0 in `01-openshift-tests/dns-summary.txt`
+- dnsperf QPS step returning rc ≠ 0, or non-zero packet loss in the dnsperf stats table
+- Node sweep coverage gap — `nodes swept < cluster nodes` in the node sweep stats section
+- DNS operator gate showing `Available=False` or `Degraded=True` in `00-preflight/dns-operator-gate.txt`
 
 ## Verdicts and diagnostics
 
