@@ -27,7 +27,7 @@ done
 
 # Run collector: client role, loopback interface (no auto-detect needed), 1s duration
 PATH="$MOCKS_DIR:$PATH" timeout 15 bash "$STANDALONE" \
-  -r client -t 127.0.0.1 -i lo -d 1 -o "$OUT_DIR" || true
+  -r client -t 127.0.0.1 -i lo -d 1 -o "$OUT_DIR"
 
 pass=0; fail=0
 check_file() {
