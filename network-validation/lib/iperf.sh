@@ -17,6 +17,8 @@ run_iperf_test() {
   local command_timeout=$((IPERF_DURATION + 30))
   local server_remote_dir="/tmp/network-validation-server"
   local client_remote_dir="/tmp/network-validation-client"
+  local collector_extra_args=()
+  [[ "${IPERF_DEEP_METRICS:-false}" == "true" ]] && collector_extra_args+=(--deep)
 
   log "Starting iperf3 server collector in pod iperf3-server..."
   timeout "$command_timeout" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
@@ -29,6 +31,7 @@ run_iperf_test() {
       --window "$IPERF_SOCKET_BUFFER" \
       --interface "$IPERF_INTERFACE" \
       --output "$server_remote_dir" \
+      ${collector_extra_args:+"${collector_extra_args[@]}"} \
     > "$server_dir/collector.stdout" 2>"$server_dir/collector.stderr" &
   local server_pid=$!
 
@@ -56,6 +59,7 @@ run_iperf_test() {
       --packet-size "$IPERF_PACKET_SIZE" \
       --interface "$IPERF_INTERFACE" \
       --output "$client_remote_dir" \
+      ${collector_extra_args:+"${collector_extra_args[@]}"} \
     > "$client_dir/collector.stdout" 2>"$client_dir/collector.stderr" || client_rc=$?
 
   local server_rc=0
