@@ -14,22 +14,22 @@ Start the server first, then the client on a different node:
 # Terminal 1 — server node
 oc debug node/<server-node> -- chroot /host bash -s <<'EOF'
 curl -sL https://raw.githubusercontent.com/tomazb/openshift-testing/main/iperf3/iperf3-network-metrics-collector.sh \
-  | bash -s -- -r server
+  | bash -s -- -r server -o /tmp/iperf3-server
 EOF
 
 # Terminal 2 — client node (substitute <server-node-ip> with the node's IP)
 oc debug node/<client-node> -- chroot /host bash -s <<'EOF'
 curl -sL https://raw.githubusercontent.com/tomazb/openshift-testing/main/iperf3/iperf3-network-metrics-collector.sh \
-  | bash -s -- -r client -t <server-node-ip> -d 30 -o /tmp/metrics
+  | bash -s -- -r client -t <server-node-ip> -d 30 -o /tmp/iperf3-client
 EOF
 ```
 
-Or copy the script in advance to avoid downloading it twice:
+Single-command alternative:
 
 ```bash
-oc debug node/<client-node> -- bash -c \
+oc debug node/<client-node> -- chroot /host bash -c \
   'curl -sL https://raw.githubusercontent.com/tomazb/openshift-testing/main/iperf3/iperf3-network-metrics-collector.sh \
-   | bash -s -- -r client -t <server-ip> -d 30 -p tcp -o /tmp/metrics'
+   | bash -s -- -r client -t <server-ip> -d 30 -p tcp -o /tmp/iperf3-client'
 ```
 
 ## Options
@@ -73,10 +73,13 @@ oc debug node/<client-node> -- bash -c \
 
 ```bash
 # From a separate terminal while the debug pod is still running:
-oc exec <debug-pod-name> -- tar -cf - /tmp/metrics | tar -xf - -C ./local-artifacts/
+# (artifacts land under /host/tmp/ from the pod's perspective because the script runs inside chroot /host)
+oc exec <debug-pod-name> -- tar -cf - /host/tmp/iperf3-client | tar -xf - -C ./local-artifacts/
+oc exec <debug-pod-name> -- tar -cf - /host/tmp/iperf3-server | tar -xf - -C ./local-artifacts/
 
 # Or with oc cp (if the pod has a name):
-oc cp <debug-pod-name>:/tmp/metrics ./local-artifacts/
+oc cp <debug-pod-name>:/host/tmp/iperf3-client ./local-artifacts/
+oc cp <debug-pod-name>:/host/tmp/iperf3-server ./local-artifacts/
 ```
 
 ## Quick analysis after retrieval
