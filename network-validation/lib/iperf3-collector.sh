@@ -194,7 +194,7 @@ collect_continuous_metrics() {
       awk -v ts="$ts" '/^MemTotal:|^MemFree:|^MemAvailable:|^Buffers:|^Cached:/ {printf "%s,%s,%s\n", ts, $1, $2}' /proc/meminfo >> "$LOG_DIR/07_memory.log" 2>/dev/null || true
       awk -v ts="$ts" '{printf "%s,%s,%s,%s\n", ts, $1, $2, $3}' /proc/loadavg >> "$LOG_DIR/08_loadavg.log" 2>/dev/null || true
       if [[ $(( sec % 2 )) -eq 0 ]]; then
-        { echo "--- TIMESTAMP $ts ---"; ethtool -S "$INTERFACE" 2>/dev/null || true; } >> "$LOG_DIR/10_ethtool_stats.log"
+        { echo "--- TIMESTAMP $ts ---"; ethtool -S "$INTERFACE" 2>/dev/null || true; } >> "$LOG_DIR/10_ethtool_stats.log" || true
       fi
       if command_available ss; then
         if [[ "$PROTOCOL" == "udp" ]]; then
