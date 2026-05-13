@@ -303,12 +303,14 @@ source "$PROJECT_DIR/lib/perf.sh"
 menu() {
   init_dirs
   while true; do
+    local pull_secret_warning=""
+    [[ -f "$PULL_SECRET_FILE" ]] || pull_secret_warning="[!] PULL_SECRET_FILE not configured — conformance tests (3,4,5,6) will be skipped"
     cat <<MENU
 
 OpenShift DNS Validation
 Artifact directory: $ARTIFACT_DIR
 Namespace:          $VALIDATION_NAMESPACE
-
+$pull_secret_warning
   1) Init/check local tools
   2) Preflight cluster + DNS baseline
   3) Extract release-matched openshift-tests

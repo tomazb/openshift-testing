@@ -204,7 +204,7 @@ $(cat "$ARTIFACT_DIR/00-preflight/dns-operator-gate.txt" 2>/dev/null || echo "No
 ## openshift-tests DNS summary
 
 \`\`\`
-$(cat "$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" 2>/dev/null || echo "Not run")
+$(if [[ -f "$ARTIFACT_DIR/01-openshift-tests/pull-secret-skipped" ]]; then echo "Skipped — pull secret not configured"; else cat "$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt" 2>/dev/null || echo "Not run"; fi)
 \`\`\`
 
 ## openshift-tests DNS exclusions

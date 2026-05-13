@@ -219,24 +219,29 @@ results_compute_verdict() {
 
   local dns_summary="$ARTIFACT_DIR/01-openshift-tests/dns-summary.txt"
   local dns_rc_file="$ARTIFACT_DIR/01-openshift-tests/dns-test-output.rc"
+  local pull_secret_skipped="$ARTIFACT_DIR/01-openshift-tests/pull-secret-skipped"
   local failed skipped excluded dns_rc
   failed="$(results_count_dns_summary_status failed)"
   skipped="$(results_count_dns_summary_status skipped)"
   excluded="$(results_count_file_lines "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt")"
   dns_rc="$(results_read_artifact_rc "$dns_rc_file")"
-  if [[ ! -s "$dns_summary" ]]; then
+  if [[ -f "$pull_secret_skipped" ]]; then
+    results_add_risk_reason "DNS conformance tests skipped (pull secret not available)"
+  elif [[ ! -s "$dns_summary" ]]; then
     results_add_blocking_reason "DNS conformance summary artifact missing" "$dns_summary"
   elif [[ "$failed" != "0" ]]; then
     results_add_blocking_reason "Selected DNS conformance tests failed: failed=$failed" "$dns_summary"
   fi
-  if [[ "$dns_rc" != "0" && "$dns_rc" != "not run" && "$failed" == "0" ]]; then
-    results_add_risk_reason "openshift-tests returned rc=$dns_rc with no selected DNS test failures" "$dns_rc_file"
-  fi
-  if [[ "$skipped" != "0" ]]; then
-    results_add_risk_reason "Selected DNS conformance tests included skipped results: skipped=$skipped" "$dns_summary"
-  fi
-  if [[ "$excluded" != "0" ]]; then
-    results_add_risk_reason "DNS conformance tests were excluded: excluded=$excluded" "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt"
+  if [[ ! -f "$pull_secret_skipped" ]]; then
+    if [[ "$dns_rc" != "0" && "$dns_rc" != "not run" && "$failed" == "0" ]]; then
+      results_add_risk_reason "openshift-tests returned rc=$dns_rc with no selected DNS test failures" "$dns_rc_file"
+    fi
+    if [[ "$skipped" != "0" ]]; then
+      results_add_risk_reason "Selected DNS conformance tests included skipped results: skipped=$skipped" "$dns_summary"
+    fi
+    if [[ "$excluded" != "0" ]]; then
+      results_add_risk_reason "DNS conformance tests were excluded: excluded=$excluded" "$ARTIFACT_DIR/01-openshift-tests/dns-tests.excluded.txt"
+    fi
   fi
 
   local nodes kubernetes openshift external node_counts node_file cluster_nodes
