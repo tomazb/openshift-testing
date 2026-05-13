@@ -53,7 +53,7 @@ parse_args() {
       --interface|-i) INTERFACE="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --output|-o) OUTPUT_DIR="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --port) SERVER_PORT="$(require_value "$1" "${2:-}")"; shift 2 ;;
-      --deep) DEEP="true" ;;
+      --deep) DEEP="true"; shift ;;
       --help|-h) usage ;;
       *) echo "Unknown option: $1" >&2; usage ;;
     esac
