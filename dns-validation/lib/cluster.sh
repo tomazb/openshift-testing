@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Cluster baseline and openshift-tests actions.
 
+require_pull_secret() {
+  [[ -f "$PULL_SECRET_FILE" ]] && return 0
+  warn "PULL_SECRET_FILE not found or not readable: $PULL_SECRET_FILE — skipping (conformance tests require a pull secret)"
+  mkdir -p "$ARTIFACT_DIR/01-openshift-tests"
+  touch "$ARTIFACT_DIR/01-openshift-tests/pull-secret-skipped"
+  return 1
+}
+
 write_run_info_kv() {
   local key="$1" value="${2-}"
   printf '%s=%q\n' "$key" "$value"
@@ -176,7 +184,8 @@ extract_tests() {
   tests_dir="$ARTIFACT_DIR/01-openshift-tests"
   release_image="${RELEASE_IMAGE:-$(oc get clusterversion version -o jsonpath='{.status.desired.image}')}"
   [[ -n "$release_image" ]] || fail "Cannot detect release image. Run preflight first."
-  [[ -f "$PULL_SECRET_FILE" ]] && auth=(-a "$PULL_SECRET_FILE")
+  require_pull_secret || return 0
+  auth=(-a "$PULL_SECRET_FILE")
 
   tests_image="$(oc adm release info --image-for=tests "${auth[@]}" "$release_image")"
   write_runtime_kv RELEASE_IMAGE "$release_image"
@@ -194,6 +203,7 @@ extract_tests() {
 
 discover_dns_tests() {
   init_dirs
+  require_pull_secret || return 0
   ensure_tests
 
   local d="$ARTIFACT_DIR/01-openshift-tests"
@@ -231,6 +241,7 @@ discover_dns_tests() {
 
 run_dns_tests() {
   init_dirs
+  require_pull_secret || return 0
   ensure_tests
 
   local d="$ARTIFACT_DIR/01-openshift-tests"
@@ -250,6 +261,7 @@ run_dns_tests() {
 
 run_single_test() {
   init_dirs
+  require_pull_secret || return 0
   ensure_tests
 
   local test_name="${*:-}"
