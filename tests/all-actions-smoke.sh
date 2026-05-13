@@ -15,6 +15,20 @@ cat >"$FAKE_BIN/oc" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Strip -a <auth-file> pairs so matches below are auth-agnostic.
+_args=()
+_i=1
+while [[ $_i -le $# ]]; do
+  if [[ "${!_i}" == "-a" ]]; then
+    _i=$((_i + 2))
+  else
+    _args+=("${!_i}")
+    _i=$((_i + 1))
+  fi
+done
+set -- "${_args[@]+"${_args[@]}"}"
+unset _args _i
+
 args="$*"
 
 case "$args" in
@@ -198,12 +212,14 @@ ARTIFACT_DIR="$TMP_DIR/artifacts"
 mkdir -p "$ARTIFACT_DIR/04-perf-tests"
 echo "0" >"$ARTIFACT_DIR/04-perf-tests/perf-tests-run.rc"
 
+echo '{"auths":{}}' >"$TMP_DIR/pull-secret.json"
+
 CONFIG_FILE="$TMP_DIR/validation.env"
 cat >"$CONFIG_FILE" <<EOF
 ARTIFACT_DIR="$ARTIFACT_DIR"
 VALIDATION_NAMESPACE="dns-validation"
 RELEASE_IMAGE="quay.io/openshift-release-dev/ocp-release:test"
-PULL_SECRET_FILE="$TMP_DIR/missing-pull-secret.json"
+PULL_SECRET_FILE="$TMP_DIR/pull-secret.json"
 DNSPERF_QPS_STEPS="100"
 DNSPERF_DURATION_SECONDS="1"
 DNSPERF_CLIENTS="1"
