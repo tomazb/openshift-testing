@@ -16,6 +16,8 @@ SERVER_PORT="5201"
 LOG_DIR=""
 IPERF_PID=""
 METRIC_PID=""
+DEEP="false"
+MPSTAT_PID=""
 
 usage() {
   cat <<USAGE
@@ -32,6 +34,7 @@ Options:
   --interface IFACE     Interface to monitor, or auto
   --output DIR          Artifact directory inside the pod
   --port PORT           iperf3 server port
+  --deep                Enable extended metric collection (softirqs, sockstat, PSI, mpstat, etc.)
 USAGE
   exit 1
 }
@@ -50,6 +53,7 @@ parse_args() {
       --interface|-i) INTERFACE="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --output|-o) OUTPUT_DIR="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --port) SERVER_PORT="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      --deep) DEEP="true" ;;
       --help|-h) usage ;;
       *) echo "Unknown option: $1" >&2; usage ;;
     esac
@@ -74,6 +78,22 @@ require_value() {
 
 command_available() {
   command -v "$1" >/dev/null 2>&1
+}
+
+start_mpstat_loop() {
+  [[ "$DEEP" == "true" ]] || return 0
+  command_available mpstat || return 0
+  local mpstat_file="$LOG_DIR/12_mpstat.log"
+  (
+    while true; do
+      {
+        echo "--- TIMESTAMP $(date +%s.%N) ---"
+        mpstat -P ALL 1 1 2>/dev/null || true
+      } >> "$mpstat_file"
+      sleep 4
+    done
+  ) &
+  MPSTAT_PID=$!
 }
 
 detect_interface() {
@@ -153,8 +173,9 @@ collect_continuous_metrics() {
   echo "timestamp,iface,rx_bytes,rx_packets,rx_errs,rx_drop,tx_bytes,tx_packets,tx_errs,tx_drop" >"$netdev_file"
 
   while true; do
-    local ts cur_cpu_line
+    local ts cur_cpu_line sec
     ts="$(date +%s.%N)"
+    sec="${ts%%.*}"
     cur_cpu_line="$(grep '^cpu ' /proc/stat | head -1)"
     if [[ -n "$prev_cpu_line" ]]; then
       awk -v ts="$ts" -v cur="$cur_cpu_line" -v prev="$prev_cpu_line" 'BEGIN {
@@ -165,6 +186,27 @@ collect_continuous_metrics() {
     fi
     prev_cpu_line="$cur_cpu_line"
     awk -v ts="$ts" -v iface="$INTERFACE" '$1 == iface ":" {gsub(":",""); printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", ts, $1, $2, $3, $4, $5, $10, $11, $12, $13}' /proc/net/dev >>"$netdev_file" 2>/dev/null || true
+    if [[ "$DEEP" == "true" ]]; then
+      awk -v ts="$ts" '/NET_RX|NET_TX/ {printf "%s,%s", ts, $1; for(i=2;i<=NF;i++) printf ",%s", $i; print ""}' /proc/softirqs >> "$LOG_DIR/03_softirq.log" 2>/dev/null || true
+      awk -v ts="$ts" '/^TcpExt:|^IpExt:/ {printf "%s,%s\n", ts, $0}' /proc/net/netstat >> "$LOG_DIR/04_tcpext.log" 2>/dev/null || true
+      awk -v ts="$ts" '/^Udp:|^Tcp:/ {printf "%s,%s\n", ts, $0}' /proc/net/snmp >> "$LOG_DIR/05_snmp.log" 2>/dev/null || true
+      awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' /proc/net/sockstat >> "$LOG_DIR/06_sockstat.log" 2>/dev/null || true
+      awk -v ts="$ts" '/^MemTotal:|^MemFree:|^MemAvailable:|^Buffers:|^Cached:/ {printf "%s,%s,%s\n", ts, $1, $2}' /proc/meminfo >> "$LOG_DIR/07_memory.log" 2>/dev/null || true
+      awk -v ts="$ts" '{printf "%s,%s,%s,%s\n", ts, $1, $2, $3}' /proc/loadavg >> "$LOG_DIR/08_loadavg.log" 2>/dev/null || true
+      if [[ $(( sec % 2 )) -eq 0 ]]; then
+        { echo "--- TIMESTAMP $ts ---"; ethtool -S "$INTERFACE" 2>/dev/null || true; } >> "$LOG_DIR/10_ethtool_stats.log"
+      fi
+      if command_available ss; then
+        if [[ "$PROTOCOL" == "udp" ]]; then
+          ss -uanmp 2>/dev/null | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss.log" || true
+        else
+          ss -tanmp 2>/dev/null | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss.log" || true
+        fi
+      fi
+      if [[ -f /proc/pressure/cpu ]]; then
+        awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' /proc/pressure/cpu >> "$LOG_DIR/13_psi.log" 2>/dev/null || true
+      fi
+    fi
     sleep 1
   done
 }
@@ -186,12 +228,17 @@ cleanup() {
     kill "$METRIC_PID" 2>/dev/null || true
     wait "$METRIC_PID" 2>/dev/null || true
   fi
+  if [[ -n "${MPSTAT_PID:-}" ]]; then
+    kill "$MPSTAT_PID" 2>/dev/null || true
+    wait "$MPSTAT_PID" 2>/dev/null || true
+  fi
   collect_posttest 2>/dev/null || true
 }
 
 run_server() {
   collect_continuous_metrics &
   METRIC_PID=$!
+  start_mpstat_loop
   iperf3 -s -p "$SERVER_PORT" -1 --json >"$LOG_DIR/iperf3_server.json" 2>"$LOG_DIR/iperf3_server.stderr" &
   IPERF_PID=$!
   local rc=0
@@ -204,6 +251,7 @@ run_server() {
 run_client() {
   collect_continuous_metrics &
   METRIC_PID=$!
+  start_mpstat_loop
   local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION" -w "$SOCKET_BUFFER" -P "$PARALLEL" --json)
   if [[ "$PROTOCOL" == "udp" ]]; then
     iperf_args+=(-u -b "$BANDWIDTH" -l "$PACKET_SIZE")
