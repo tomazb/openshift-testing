@@ -98,6 +98,16 @@ retrieve_collector_artifacts() {
     iperf3_server.json
     iperf3_server.stderr
     iperf3_server.rc
+    03_softirq.log
+    04_tcpext.log
+    05_snmp.log
+    06_sockstat.log
+    07_memory.log
+    08_loadavg.log
+    10_ethtool_stats.log
+    11_ss.log
+    12_mpstat.log
+    13_psi.log
   )
   mkdir -p "$local_dir"
   for f in "${files[@]}"; do
@@ -306,5 +316,31 @@ all_actions() {
   deploy_pods
   run_cross_node
   ovn_diagnostics
+  run_node_metrics
   report
+}
+
+run_node_metrics() {
+  init_dirs
+  require_cmd oc
+  ensure_pods_deployed
+
+  local orig_duration="$IPERF_DURATION"
+  local orig_protocol="$IPERF_PROTOCOL"
+  local orig_deep="${IPERF_DEEP_METRICS:-false}"
+  IPERF_DURATION="$NODE_METRICS_DURATION"
+  IPERF_PROTOCOL="$NODE_METRICS_PROTOCOL"
+  IPERF_DEEP_METRICS="true"
+
+  local d="$ARTIFACT_DIR/05-node-metrics"
+  collect_pod_baseline "iperf3-server" "$d"
+  collect_pod_baseline "iperf3-client" "$d"
+
+  local target_ip
+  target_ip="$(get_target_ip pod)"
+  run_iperf_test "node-metrics" "$target_ip" "$d"
+
+  IPERF_DURATION="$orig_duration"
+  IPERF_PROTOCOL="$orig_protocol"
+  IPERF_DEEP_METRICS="$orig_deep"
 }
