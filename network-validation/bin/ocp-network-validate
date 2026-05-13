@@ -25,6 +25,7 @@ Actions:
   same-node            Run same-node pod network test
   host-network         Run host-network test (bypasses overlay)
   pod-to-service       Run pod-to-service test via ClusterIP
+  node-metrics         Run dedicated node-level metrics collection (deep, 120 s by default)
   ovn-diagnostics      Capture OVN-Kubernetes diagnostics
   report               Generate markdown report
   cleanup              Delete validation namespace
@@ -90,6 +91,9 @@ IPERF_SERVER_READY_TIMEOUT="${IPERF_SERVER_READY_TIMEOUT:-30}"
 IPERF_MIN_THROUGHPUT_GBPS="${IPERF_MIN_THROUGHPUT_GBPS:-0}"
 IPERF_MAX_LOSS_PERCENT="${IPERF_MAX_LOSS_PERCENT:-1}"
 IPERF_MAX_RETRANSMITS="${IPERF_MAX_RETRANSMITS:-0}"
+NODE_METRICS_DURATION="${NODE_METRICS_DURATION:-120}"
+NODE_METRICS_PROTOCOL="${NODE_METRICS_PROTOCOL:-tcp}"
+IPERF_DEEP_METRICS="${IPERF_DEEP_METRICS:-false}"
 
 # --- Config validation ---
 config_error() {
@@ -141,6 +145,15 @@ validate_config() {
     ""|true|false) ;;
     *) config_error "IPERF_PRIVILEGED_MODE must be true, false, or empty" ;;
   esac
+  validate_positive_integer NODE_METRICS_DURATION "$NODE_METRICS_DURATION"
+  case "$NODE_METRICS_PROTOCOL" in
+    udp|tcp) ;;
+    *) config_error "NODE_METRICS_PROTOCOL must be udp or tcp" ;;
+  esac
+  case "$IPERF_DEEP_METRICS" in
+    true|false) ;;
+    *) config_error "IPERF_DEEP_METRICS must be true or false" ;;
+  esac
 }
 
 validate_config
@@ -191,6 +204,7 @@ Namespace:          $IPERF_NAMESPACE
  10) Cleanup validation namespace
  11) Run recommended sequence
  12) Show artifact paths
+ 13) Run node-level metrics collection
   q) Quit
 MENU
     read -r -p "Select action: " choice
@@ -207,6 +221,7 @@ MENU
       10) cleanup_action ;;
       11) all_actions ;;
       12) show_paths ;;
+      13) run_node_metrics ;;
       q|Q) break ;;
       *) echo "Invalid choice." ;;
     esac
@@ -222,6 +237,7 @@ case "$ACTION" in
   same-node) run_same_node ;;
   host-network) run_host_network ;;
   pod-to-service) run_pod_to_service ;;
+  node-metrics) run_node_metrics ;;
   ovn-diagnostics) ovn_diagnostics ;;
   report) report ;;
   cleanup) cleanup_action ;;
