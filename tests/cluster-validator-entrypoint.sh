@@ -87,7 +87,24 @@ VALIDATOR=dns run_ep --config-dir "$TMP_DIR/config"
 
 grep -Fq -- "--config $TMP_DIR/config/validation.env --yes all" "$DNS_CALLS"
 
-# --- Test 6: VALIDATOR=all continues past a dns failure ---
+# --- Test 6: CONFIG_DIR env override passes --config to the validator ---
+reset_calls
+mkdir -p "$TMP_DIR/env-config"
+echo "# config" > "$TMP_DIR/env-config/validation.env"
+
+CONFIG_DIR="$TMP_DIR/env-config" VALIDATOR=dns run_ep
+
+grep -Fq -- "--config $TMP_DIR/env-config/validation.env --yes all" "$DNS_CALLS"
+
+# --- Test 7: kubeconfig generation is safe under set -u ---
+# shellcheck disable=SC2016
+grep -Fq '[[ -f "$_SA_TOKEN" && -f "$_SA_CA" && -f "$_SA_NS_FILE" ]]' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
+# shellcheck disable=SC2016
+grep -Fq 'HOME_DIR="${HOME:-/tmp}"' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
+# shellcheck disable=SC2016
+grep -Fq 'cat >"$HOME_DIR/.kube/config"' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
+
+# --- Test 8: VALIDATOR=all continues past a dns failure ---
 reset_calls
 FAIL_DNS_STUB="$TMP_DIR/fail-dns-stub"
 cat >"$FAIL_DNS_STUB" <<'STUB'
@@ -113,7 +130,7 @@ fi
 # network must still have been called even though dns failed
 grep -Fq -- "--yes all" "$NETWORK_CALLS"
 
-# --- Test 7: Unknown VALIDATOR value exits 2 ---
+# --- Test 9: Unknown VALIDATOR value exits 2 ---
 reset_calls
 set +e
 VALIDATOR=bogus run_ep >/dev/null 2>&1
@@ -124,7 +141,7 @@ if [[ "$rc" -ne 2 ]]; then
   exit 1
 fi
 
-# --- Test 8: --config-dir without argument exits 2 ---
+# --- Test 10: --config-dir without argument exits 2 ---
 reset_calls
 set +e
 run_ep --config-dir >/dev/null 2>&1

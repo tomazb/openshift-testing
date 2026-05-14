@@ -6,7 +6,7 @@ set -Eeuo pipefail
 DNS_VALIDATE="${DNS_VALIDATE:-/opt/openshift-testing/dns-validation/bin/ocp-dns-validate}"
 NETWORK_VALIDATE="${NETWORK_VALIDATE:-/opt/openshift-testing/network-validation/bin/ocp-network-validate}"
 VALIDATOR="${VALIDATOR:-dns}"
-CONFIG_DIR="/config"
+CONFIG_DIR="${CONFIG_DIR:-/config}"
 
 # Allow --config-dir override (used by smoke tests to inject a custom config dir)
 if [[ "${1:-}" == "--config-dir" ]]; then
@@ -22,10 +22,11 @@ fi
 _SA_TOKEN="/var/run/secrets/kubernetes.io/serviceaccount/token"
 _SA_CA="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 _SA_NS_FILE="/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-if [[ -f "$_SA_TOKEN" && -f "$_SA_CA" ]]; then
-  mkdir -p "$HOME/.kube"
+if [[ -f "$_SA_TOKEN" && -f "$_SA_CA" && -f "$_SA_NS_FILE" ]]; then
+  HOME_DIR="${HOME:-/tmp}"
+  mkdir -p "$HOME_DIR/.kube"
   _ns="$(cat "$_SA_NS_FILE")"
-  cat >"$HOME/.kube/config" <<KUBECONFIG
+  cat >"$HOME_DIR/.kube/config" <<KUBECONFIG
 apiVersion: v1
 kind: Config
 clusters:

@@ -9,18 +9,26 @@ if [[ ! -f "$WORKFLOW" ]]; then
   exit 1
 fi
 
-grep -Fq "REGISTRY: ghcr.io" "$WORKFLOW"
+assert_contains() {
+  local expected="$1"
+  if ! grep -Fq "$expected" "$WORKFLOW"; then
+    echo "workflow expectation missing in $WORKFLOW: $expected" >&2
+    exit 1
+  fi
+}
+
+assert_contains "REGISTRY: ghcr.io"
 # shellcheck disable=SC2016
-grep -Fq 'IMAGE_NAME: ${{ github.repository }}/cluster-validator' "$WORKFLOW"
-grep -Fq "docker/build-push-action@v7" "$WORKFLOW"
-grep -Fq "file: cluster-validator/Containerfile" "$WORKFLOW"
-grep -Fq "tags: cluster-validator:test" "$WORKFLOW"
-grep -Fq "docker run --rm --entrypoint bash cluster-validator:test -euxo pipefail -c" "$WORKFLOW"
-grep -Fq "command -v validator" "$WORKFLOW"
-grep -Fq "test -f /opt/openshift-testing/dns-validation/bin/ocp-dns-validate" "$WORKFLOW"
-grep -Fq "test -f /opt/openshift-testing/network-validation/bin/ocp-network-validate" "$WORKFLOW"
-grep -Fq "test -d /artifacts" "$WORKFLOW"
-grep -Fq "test -d /config" "$WORKFLOW"
-grep -Fq "push: true" "$WORKFLOW"
-grep -Fq "if: github.event_name == 'push'" "$WORKFLOW"
-grep -Fq "platforms: linux/amd64,linux/arm64" "$WORKFLOW"
+assert_contains 'IMAGE_NAME: ${{ github.repository }}/cluster-validator'
+assert_contains "docker/build-push-action@v7"
+assert_contains "file: cluster-validator/Containerfile"
+assert_contains "tags: cluster-validator:test"
+assert_contains "docker run --rm --entrypoint bash cluster-validator:test -Eeuo pipefail -c"
+assert_contains "command -v validator"
+assert_contains "test -f /opt/openshift-testing/dns-validation/bin/ocp-dns-validate"
+assert_contains "test -f /opt/openshift-testing/network-validation/bin/ocp-network-validate"
+assert_contains "test -d /artifacts"
+assert_contains "test -d /config"
+assert_contains "push: true"
+assert_contains "if: github.event_name == 'push'"
+assert_contains "platforms: linux/amd64,linux/arm64"

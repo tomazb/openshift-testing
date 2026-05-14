@@ -17,7 +17,7 @@ Add a new `cluster-validator/` top-level directory. It contains:
 
 ## Directory Layout
 
-```
+```text
 cluster-validator/
 ├── Containerfile
 ├── bin/
@@ -59,7 +59,7 @@ Scripts are copied at image build time. No volume mount for scripts is needed.
 
 ### Image tags published
 
-```
+```text
 ghcr.io/tomazb/openshift-testing/cluster-validator:latest
 ghcr.io/tomazb/openshift-testing/cluster-validator:main
 ghcr.io/tomazb/openshift-testing/cluster-validator:sha-<short-sha>
