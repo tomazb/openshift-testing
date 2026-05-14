@@ -14,9 +14,9 @@ The test should prove that the new `cluster-validator` manifests and container e
 - Kubernetes context: `ocp1htz1`
 - User identity: `system:admin`
 - OpenShift version observed before the test: `4.20.17`
-- Test namespace: `openshift-testing`
+- Test namespace: `cluster-validator`
 
-The namespace does not exist before the test, so the run will create it through the PR manifest.
+The namespace does not exist before the test, so the run will create it through the PR manifest. The namespace must not use the reserved `openshift-*` prefix.
 
 ## Scope
 
@@ -52,7 +52,7 @@ Out of scope:
 8. Create the network validation Job.
 9. Wait for the network Job to complete or fail.
 10. Collect network Job description, pod status, and logs.
-11. Clean up the `openshift-testing` namespace and cluster-scoped RBAC created by the manifests.
+11. Clean up the `cluster-validator` namespace and cluster-scoped RBAC created by the manifests.
 
 ## Success Criteria
 
@@ -76,7 +76,7 @@ If a cluster step fails, collect the highest-signal evidence before cleanup:
 - `oc get pods -o wide`
 - `oc describe pod`
 - `oc logs`
-- relevant events from the `openshift-testing` namespace
+- relevant events from the `cluster-validator` namespace
 
 Cleanup still runs unless the remaining resources are needed to inspect an active failure.
 
@@ -84,11 +84,11 @@ Cleanup still runs unless the remaining resources are needed to inspect an activ
 
 The cleanup will remove:
 
-- `job/dns-validation` in `openshift-testing`, if present
-- `job/network-validation` in `openshift-testing`, if present
+- `job/dns-validation` in `cluster-validator`, if present
+- `job/network-validation` in `cluster-validator`, if present
 - `clusterrolebinding/cluster-validator`
 - `clusterrole/cluster-validator`
-- `namespace/openshift-testing`
+- `namespace/cluster-validator`
 
 The cleanup does not delete unrelated cluster resources.
 

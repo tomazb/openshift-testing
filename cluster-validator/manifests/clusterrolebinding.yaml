@@ -9,4 +9,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-validator
-    namespace: openshift-testing
+    namespace: cluster-validator

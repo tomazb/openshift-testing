@@ -20,11 +20,11 @@ oc apply -f cluster-validator/manifests/clusterrolebinding.yaml
 oc create -f cluster-validator/manifests/job-dns.yaml
 
 # 3. Follow logs
-oc logs -f job/dns-validation -n openshift-testing
+oc logs -f job/dns-validation -n cluster-validator
 
 # 4. Run network validation
 oc create -f cluster-validator/manifests/job-network.yaml
-oc logs -f job/network-validation -n openshift-testing
+oc logs -f job/network-validation -n cluster-validator
 ```
 
 ## Configuration
@@ -39,7 +39,7 @@ Example variables are documented as comments in `job-dns.yaml` and `job-network.
 Copy `manifests/configmap-dns-example.yaml` to `configmap-dns.yaml`, remove the `-example` suffix, uncomment and edit variables, then:
 
 ```bash
-oc apply -f cluster-validator/manifests/configmap-dns.yaml -n openshift-testing
+oc apply -f cluster-validator/manifests/configmap-dns.yaml -n cluster-validator
 ```
 
 Uncomment the `volumes` and `volumeMounts` sections in `job-dns.yaml`, then create the Job.

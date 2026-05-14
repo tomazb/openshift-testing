@@ -442,7 +442,7 @@ cat > cluster-validator/manifests/namespace.yaml << 'EOF'
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: openshift-testing
+  name: cluster-validator
 EOF
 ```
 
@@ -454,7 +454,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: cluster-validator
-  namespace: openshift-testing
+  namespace: cluster-validator
 EOF
 ```
 
@@ -532,7 +532,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-validator
-    namespace: openshift-testing
+    namespace: cluster-validator
 EOF
 ```
 
@@ -561,7 +561,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: dns-validation
-  namespace: openshift-testing
+  namespace: cluster-validator
 spec:
   backoffLimit: 0
   template:
@@ -607,7 +607,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: network-validation
-  namespace: openshift-testing
+  namespace: cluster-validator
 spec:
   backoffLimit: 0
   template:
@@ -669,12 +669,12 @@ cat > cluster-validator/manifests/configmap-dns-example.yaml << 'EOF'
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-dns.yaml under /config.
 #
-# oc create -f configmap-dns.yaml -n openshift-testing
+# oc create -f configmap-dns.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dns-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for node sweep and dnsperf workloads.
@@ -711,12 +711,12 @@ cat > cluster-validator/manifests/configmap-network-example.yaml << 'EOF'
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-network.yaml under /config.
 #
-# oc create -f configmap-network.yaml -n openshift-testing
+# oc create -f configmap-network.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: network-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for iperf3 pods.
@@ -905,11 +905,11 @@ oc apply -f cluster-validator/manifests/clusterrolebinding.yaml
 oc create -f cluster-validator/manifests/job-dns.yaml
 
 # 3. Follow logs
-oc logs -f job/dns-validation -n openshift-testing
+oc logs -f job/dns-validation -n cluster-validator
 
 # 4. Run network validation
 oc create -f cluster-validator/manifests/job-network.yaml
-oc logs -f job/network-validation -n openshift-testing
+oc logs -f job/network-validation -n cluster-validator
 ```
 
 ## Configuration
@@ -924,7 +924,7 @@ Example variables are documented as comments in `job-dns.yaml` and `job-network.
 Copy `manifests/configmap-dns-example.yaml` to `configmap-dns.yaml`, remove the `-example` suffix, uncomment and edit variables, then:
 
 ```bash
-oc apply -f cluster-validator/manifests/configmap-dns.yaml -n openshift-testing
+oc apply -f cluster-validator/manifests/configmap-dns.yaml -n cluster-validator
 ```
 
 Uncomment the `volumes` and `volumeMounts` sections in `job-dns.yaml`, then create the Job.

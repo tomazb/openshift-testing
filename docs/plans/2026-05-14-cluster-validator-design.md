@@ -91,11 +91,11 @@ If `/config/validation.env` is present (a ConfigMap mounted at `/config`), it is
 
 ### Namespace
 
-`openshift-testing` — a dedicated namespace keeps the ServiceAccount and RBAC scoped.
+`cluster-validator` — a dedicated namespace keeps the ServiceAccount and RBAC scoped without using the reserved `openshift-*` prefix.
 
 ### ServiceAccount
 
-`cluster-validator` in `openshift-testing`.
+`cluster-validator` in the `cluster-validator` namespace.
 
 ### ClusterRole (minimal)
 
@@ -113,7 +113,7 @@ The ClusterRole grants only what the validator scripts actually invoke:
 
 ### ClusterRoleBinding
 
-Binds the ClusterRole to the `cluster-validator` ServiceAccount in `openshift-testing`.
+Binds the ClusterRole to the `cluster-validator` ServiceAccount in the `cluster-validator` namespace.
 
 ### Jobs
 

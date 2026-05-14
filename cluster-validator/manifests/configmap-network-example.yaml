@@ -1,12 +1,12 @@
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-network.yaml under /config.
 #
-# oc create -f configmap-network.yaml -n openshift-testing
+# oc create -f configmap-network.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: network-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for iperf3 pods.

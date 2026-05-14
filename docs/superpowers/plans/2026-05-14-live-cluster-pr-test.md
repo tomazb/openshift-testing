@@ -103,8 +103,8 @@ Expected: each command exits `0` and reports `created`, `configured`, or `unchan
 Run:
 
 ```bash
-oc get namespace openshift-testing
-oc get serviceaccount cluster-validator -n openshift-testing
+oc get namespace cluster-validator
+oc get serviceaccount cluster-validator -n cluster-validator
 ```
 
 Expected: both resources exist.
@@ -131,7 +131,7 @@ Expected: both resources exist.
 Run:
 
 ```bash
-oc delete job dns-validation -n openshift-testing --ignore-not-found=true
+oc delete job dns-validation -n cluster-validator --ignore-not-found=true
 ```
 
 Expected: command exits `0`.
@@ -151,7 +151,7 @@ Expected: `job.batch/dns-validation created`.
 Run:
 
 ```bash
-oc wait --for=condition=complete job/dns-validation -n openshift-testing --timeout=45m
+oc wait --for=condition=complete job/dns-validation -n cluster-validator --timeout=45m
 ```
 
 Expected: `job.batch/dns-validation condition met`. If the command times out or fails, continue to evidence collection before cleanup.
@@ -161,8 +161,8 @@ Expected: `job.batch/dns-validation condition met`. If the command times out or 
 Run:
 
 ```bash
-oc get job dns-validation -n openshift-testing -o wide
-oc get pods -n openshift-testing -l job-name=dns-validation -o wide
+oc get job dns-validation -n cluster-validator -o wide
+oc get pods -n cluster-validator -l job-name=dns-validation -o wide
 ```
 
 Expected: the Job and pod are visible. Successful runs show completion.
@@ -172,7 +172,7 @@ Expected: the Job and pod are visible. Successful runs show completion.
 Run:
 
 ```bash
-oc logs job/dns-validation -n openshift-testing
+oc logs job/dns-validation -n cluster-validator
 ```
 
 Expected: logs include:
@@ -186,9 +186,9 @@ Expected: logs include:
 Run this only if the Job did not complete:
 
 ```bash
-oc describe job dns-validation -n openshift-testing
-oc describe pod -n openshift-testing -l job-name=dns-validation
-oc get events -n openshift-testing --sort-by=.lastTimestamp
+oc describe job dns-validation -n cluster-validator
+oc describe pod -n cluster-validator -l job-name=dns-validation
+oc get events -n cluster-validator --sort-by=.lastTimestamp
 ```
 
 Expected: output identifies the failure cause, such as image pull, RBAC, pod scheduling, or validator failure.
@@ -198,7 +198,7 @@ Expected: output identifies the failure cause, such as image pull, RBAC, pod sch
 Run:
 
 ```bash
-oc delete job dns-validation -n openshift-testing --ignore-not-found=true
+oc delete job dns-validation -n cluster-validator --ignore-not-found=true
 ```
 
 Expected: command exits `0`.
@@ -214,7 +214,7 @@ Expected: command exits `0`.
 Run:
 
 ```bash
-oc delete job network-validation -n openshift-testing --ignore-not-found=true
+oc delete job network-validation -n cluster-validator --ignore-not-found=true
 ```
 
 Expected: command exits `0`.
@@ -234,7 +234,7 @@ Expected: `job.batch/network-validation created`.
 Run:
 
 ```bash
-oc wait --for=condition=complete job/network-validation -n openshift-testing --timeout=45m
+oc wait --for=condition=complete job/network-validation -n cluster-validator --timeout=45m
 ```
 
 Expected: `job.batch/network-validation condition met`. If the command times out or fails, continue to evidence collection before cleanup.
@@ -244,8 +244,8 @@ Expected: `job.batch/network-validation condition met`. If the command times out
 Run:
 
 ```bash
-oc get job network-validation -n openshift-testing -o wide
-oc get pods -n openshift-testing -l job-name=network-validation -o wide
+oc get job network-validation -n cluster-validator -o wide
+oc get pods -n cluster-validator -l job-name=network-validation -o wide
 ```
 
 Expected: the Job and pod are visible. Successful runs show completion.
@@ -255,7 +255,7 @@ Expected: the Job and pod are visible. Successful runs show completion.
 Run:
 
 ```bash
-oc logs job/network-validation -n openshift-testing
+oc logs job/network-validation -n cluster-validator
 ```
 
 Expected: logs include:
@@ -269,9 +269,9 @@ Expected: logs include:
 Run this only if the Job did not complete:
 
 ```bash
-oc describe job network-validation -n openshift-testing
-oc describe pod -n openshift-testing -l job-name=network-validation
-oc get events -n openshift-testing --sort-by=.lastTimestamp
+oc describe job network-validation -n cluster-validator
+oc describe pod -n cluster-validator -l job-name=network-validation
+oc get events -n cluster-validator --sort-by=.lastTimestamp
 ```
 
 Expected: output identifies the failure cause, such as image pull, RBAC, pod scheduling, or validator failure.
@@ -286,8 +286,8 @@ Expected: output identifies the failure cause, such as image pull, RBAC, pod sch
 Run:
 
 ```bash
-oc delete job dns-validation -n openshift-testing --ignore-not-found=true
-oc delete job network-validation -n openshift-testing --ignore-not-found=true
+oc delete job dns-validation -n cluster-validator --ignore-not-found=true
+oc delete job network-validation -n cluster-validator --ignore-not-found=true
 ```
 
 Expected: both commands exit `0`.
@@ -308,7 +308,7 @@ Expected: both commands exit `0`.
 Run:
 
 ```bash
-oc delete namespace openshift-testing --ignore-not-found=true
+oc delete namespace cluster-validator --ignore-not-found=true
 ```
 
 Expected: command exits `0`.
@@ -318,7 +318,7 @@ Expected: command exits `0`.
 Run:
 
 ```bash
-oc get namespace openshift-testing
+oc get namespace cluster-validator
 oc get clusterrole cluster-validator
 oc get clusterrolebinding cluster-validator
 ```

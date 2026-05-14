@@ -1,12 +1,12 @@
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-dns.yaml under /config.
 #
-# oc create -f configmap-dns.yaml -n openshift-testing
+# oc create -f configmap-dns.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dns-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for node sweep and dnsperf workloads.
