@@ -20,6 +20,7 @@ bash -n network-validation/lib/metrics.sh
 bash -n network-validation/lib/iperf.sh
 bash -n network-validation/lib/iperf3-collector.sh
 bash -n network-validation/lib/results.sh
+bash -n iperf3/iperf3-network-metrics-collector.sh
 bash -n cluster-validator/bin/entrypoint.sh
 bash -n scripts/check-static.sh
 if [[ ! -e "${profile_files[0]}" ]]; then
