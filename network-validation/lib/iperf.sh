@@ -19,6 +19,7 @@ run_iperf_test() {
   local client_remote_dir="/tmp/network-validation-client"
   local collector_extra_args=()
   [[ "${IPERF_DEEP_METRICS:-false}" == "true" ]] && collector_extra_args+=(--deep)
+  [[ -n "${IPERF_SOCKET_BUFFER:-}" ]] && collector_extra_args+=(--window "$IPERF_SOCKET_BUFFER")
 
   log "Starting iperf3 server collector in pod iperf3-server..."
   timeout "$command_timeout" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
@@ -28,7 +29,6 @@ run_iperf_test() {
       --port "$IPERF_PORT" \
       --duration "$IPERF_DURATION" \
       --parallel "$IPERF_PARALLEL" \
-      --window "$IPERF_SOCKET_BUFFER" \
       --interface "$IPERF_INTERFACE" \
       --output "$server_remote_dir" \
       "${collector_extra_args[@]}" \
@@ -54,7 +54,6 @@ run_iperf_test() {
       --port "$IPERF_PORT" \
       --duration "$IPERF_DURATION" \
       --parallel "$IPERF_PARALLEL" \
-      --window "$IPERF_SOCKET_BUFFER" \
       --bandwidth "$IPERF_BANDWIDTH" \
       --packet-size "$IPERF_PACKET_SIZE" \
       --interface "$IPERF_INTERFACE" \
@@ -79,11 +78,14 @@ run_iperf_test() {
 
 wait_for_iperf_server() {
   local target_ip="$1" d="$2"
-  # shellcheck disable=SC2016 # evaluated by bash inside the client pod.
-  local ready_script='for i in $(seq 1 "$1"); do if timeout 1 bash -c "</dev/tcp/$2/$3" 2>/dev/null; then exit 0; fi; sleep 1; done; exit 1'
+  # Check iperf3 is in LISTEN state by querying the server pod with ss.
+  # A TCP probe from the client would be consumed by iperf3 -1 as its one
+  # permitted session, causing the real client to get "Connection refused".
+  # shellcheck disable=SC2016 # evaluated by bash inside the server pod.
+  local ready_script='for i in $(seq 1 "$1"); do if ss -tlnH 2>/dev/null | grep -qF ":$2"; then exit 0; fi; sleep 1; done; exit 1'
   log "Waiting for iperf3 server readiness on $target_ip:$IPERF_PORT..."
-  run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-client -- \
-    bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$target_ip" "$IPERF_PORT"
+  run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
+    bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$IPERF_PORT"
 }
 
 retrieve_collector_artifacts() {

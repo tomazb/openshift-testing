@@ -8,7 +8,7 @@ DURATION="30"
 BANDWIDTH="0"
 PROTOCOL="tcp"
 PACKET_SIZE="auto"
-SOCKET_BUFFER="256M"
+SOCKET_BUFFER=""
 PARALLEL="1"
 OUTPUT_DIR=""
 INTERFACE="auto"
@@ -110,7 +110,7 @@ detect_interface() {
 }
 
 auto_packet_size() {
-  [[ "$PROTOCOL" == "udp" && "$PACKET_SIZE" == "auto" ]] || return
+  [[ "$PROTOCOL" == "udp" && "$PACKET_SIZE" == "auto" ]] || return 0
   local mtu
   mtu="$(cat "/sys/class/net/$INTERFACE/mtu" 2>/dev/null || true)"
   if [[ "$mtu" =~ ^[0-9]+$ && "$mtu" -gt 28 ]]; then
@@ -253,7 +253,9 @@ run_client() {
   collect_continuous_metrics &
   METRIC_PID=$!
   start_mpstat_loop
-  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION" -w "$SOCKET_BUFFER" -P "$PARALLEL" --json)
+  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION")
+  [[ -n "$SOCKET_BUFFER" ]] && iperf_args+=(-w "$SOCKET_BUFFER")
+  iperf_args+=(-P "$PARALLEL" --json)
   if [[ "$PROTOCOL" == "udp" ]]; then
     iperf_args+=(-u -b "$BANDWIDTH" -l "$PACKET_SIZE")
   fi

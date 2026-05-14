@@ -125,6 +125,20 @@ if [[ "$args" == "-n network-validation get svc iperf3-server -o jsonpath={.spec
   exit 0
 fi
 
+# DB pod container list (tab-separated: pod-name TAB containers...) — simulates OCP 4.14+ where
+# nbdb/sbdb live in ovnkube-node; must be matched before the field-selector queries below.
+if [[ "$args" == *"get pods -l app=ovnkube-node"*'metadata.name}{"\t"}'* ]]; then
+  printf 'ovnkube-node-a\tovn-controller nbdb sbdb northd ovnkube-controller \n'
+  printf 'ovnkube-node-b\tovn-controller nbdb sbdb northd ovnkube-controller \n'
+  exit 0
+fi
+
+# Node exec container list for first pod (used to detect the right exec container).
+if [[ "$args" == *"get pods -l app=ovnkube-node"*"items[0].spec.containers"* ]]; then
+  printf 'ovn-controller\nnbdb\nsbdb\nnorthd\novnkube-controller\n'
+  exit 0
+fi
+
 if [[ "$args" == "-n openshift-ovn-kubernetes get pods -l app=ovnkube-control-plane -o jsonpath="* ]]; then
   echo "ovnkube-control-plane-a"
   exit 0
@@ -151,8 +165,8 @@ if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 -s -p 5201 
   exit 0
 fi
 
-if [[ "$args" == "-n network-validation exec iperf3-client -- bash -c "*"/dev/tcp/"* ]]; then
-  echo "ready"
+if [[ "$args" == "-n network-validation exec iperf3-server -- bash -c "*ss -tlnH*"* ]]; then
+  printf 'LISTEN  0  128  0.0.0.0:5201  0.0.0.0:*\n'
   exit 0
 fi
 
@@ -375,10 +389,11 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" ovn-diagnostics
 
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-control-plane-a-nbctl-show.txt"
+test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-control-plane-logs.txt"
+test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-node-a-nbctl-show.txt"
 test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
 test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
-grep -Fq "ovnkube-control-plane-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
+grep -Fq "ovnkube-node-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-a" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-b" "$FAKE_OC_LOG"
 
