@@ -20,7 +20,7 @@ bash -n network-validation/lib/metrics.sh
 bash -n network-validation/lib/iperf.sh
 bash -n network-validation/lib/iperf3-collector.sh
 bash -n network-validation/lib/results.sh
-bash -n iperf3/iperf3-network-metrics-collector.sh
+bash -n cluster-validator/bin/entrypoint.sh
 bash -n scripts/check-static.sh
 if [[ ! -e "${profile_files[0]}" ]]; then
   echo "no DNS validation profile files found" >&2
@@ -59,6 +59,7 @@ shellcheck -x \
   network-validation/lib/results.sh \
   iperf3/iperf3-network-metrics-collector.sh \
   scripts/check-static.sh \
+  cluster-validator/bin/entrypoint.sh \
   "${profile_files[@]}" \
   "${test_scripts[@]}"
 
