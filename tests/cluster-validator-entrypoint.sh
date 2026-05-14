@@ -29,6 +29,7 @@ chmod +x "$NETWORK_STUB"
 run_ep() {
   DNS_CALLS_FILE="$DNS_CALLS" NETWORK_CALLS_FILE="$NETWORK_CALLS" \
   DNS_VALIDATE="$DNS_STUB" NETWORK_VALIDATE="$NETWORK_STUB" \
+  ARTIFACT_DIR="$TMP_DIR/artifacts" \
   HOME="$TMP_DIR/home" \
     bash "$REPO_ROOT/cluster-validator/bin/entrypoint.sh" "$@"
 }
@@ -120,6 +121,17 @@ rc=$?
 set -e
 if [[ "$rc" -ne 2 ]]; then
   echo "FAIL: unknown VALIDATOR should exit 2, got $rc" >&2
+  exit 1
+fi
+
+# --- Test 8: --config-dir without argument exits 2 ---
+reset_calls
+set +e
+run_ep --config-dir >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -ne 2 ]]; then
+  echo "FAIL: --config-dir without argument should exit 2, got $rc" >&2
   exit 1
 fi
 
