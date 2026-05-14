@@ -50,7 +50,7 @@ jobs:
 
       - name: Smoke test image
         run: |
-          docker run --rm cluster-validator:test bash -euxo pipefail -c '
+          docker run --rm --entrypoint bash cluster-validator:test -euxo pipefail -c '
             command -v validator
             test -f /opt/openshift-testing/dns-validation/bin/ocp-dns-validate
             test -f /opt/openshift-testing/network-validation/bin/ocp-network-validate
