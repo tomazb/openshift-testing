@@ -41,9 +41,12 @@ exit 2
 EOF
 chmod +x "$TESTS_DIR/openshift-tests"
 
+touch "$TMP_DIR/pull-secret.json"
+
 CONFIG_FILE="$TMP_DIR/validation.env"
 cat >"$CONFIG_FILE" <<EOF
 ARTIFACT_DIR="$TMP_DIR/artifacts"
+PULL_SECRET_FILE="$TMP_DIR/pull-secret.json"
 DNS_TEST_EXCLUDE_REGEX="DNS should answer A and AAAA queries for a dual-stack service|DNS should answer queries using the local DNS endpoint"
 EOF
 

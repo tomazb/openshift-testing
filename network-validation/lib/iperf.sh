@@ -17,6 +17,8 @@ run_iperf_test() {
   local command_timeout=$((IPERF_DURATION + 30))
   local server_remote_dir="/tmp/network-validation-server"
   local client_remote_dir="/tmp/network-validation-client"
+  local collector_extra_args=()
+  [[ "${IPERF_DEEP_METRICS:-false}" == "true" ]] && collector_extra_args+=(--deep)
 
   log "Starting iperf3 server collector in pod iperf3-server..."
   timeout "$command_timeout" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
@@ -29,6 +31,7 @@ run_iperf_test() {
       --window "$IPERF_SOCKET_BUFFER" \
       --interface "$IPERF_INTERFACE" \
       --output "$server_remote_dir" \
+      "${collector_extra_args[@]}" \
     > "$server_dir/collector.stdout" 2>"$server_dir/collector.stderr" &
   local server_pid=$!
 
@@ -56,6 +59,7 @@ run_iperf_test() {
       --packet-size "$IPERF_PACKET_SIZE" \
       --interface "$IPERF_INTERFACE" \
       --output "$client_remote_dir" \
+      "${collector_extra_args[@]}" \
     > "$client_dir/collector.stdout" 2>"$client_dir/collector.stderr" || client_rc=$?
 
   local server_rc=0
@@ -98,6 +102,16 @@ retrieve_collector_artifacts() {
     iperf3_server.json
     iperf3_server.stderr
     iperf3_server.rc
+    03_softirqs.log
+    04_netstat.log
+    05_snmp.log
+    06_sockstat.log
+    07_memory.log
+    08_loadavg.log
+    10_ethtool_S.log
+    11_ss_sockets.log
+    12_mpstat.log
+    13_pressure.log
   )
   mkdir -p "$local_dir"
   for f in "${files[@]}"; do
@@ -306,5 +320,32 @@ all_actions() {
   deploy_pods
   run_cross_node
   ovn_diagnostics
+  run_node_metrics
   report
+}
+
+run_node_metrics() {
+  init_dirs
+  require_cmd oc
+  ensure_pods_deployed
+
+  local orig_duration="$IPERF_DURATION"
+  local orig_protocol="$IPERF_PROTOCOL"
+  local orig_deep="${IPERF_DEEP_METRICS:-false}"
+  IPERF_DURATION="$NODE_METRICS_DURATION"
+  IPERF_PROTOCOL="$NODE_METRICS_PROTOCOL"
+  IPERF_DEEP_METRICS="true"
+
+  local d="$ARTIFACT_DIR/05-node-metrics"
+  mkdir -p "$d"
+  collect_pod_baseline "iperf3-server" "$d"
+  collect_pod_baseline "iperf3-client" "$d"
+
+  local target_ip
+  target_ip="$(get_target_ip pod)"
+  run_iperf_test "node-metrics" "$target_ip" "$d"
+
+  IPERF_DURATION="$orig_duration"
+  IPERF_PROTOCOL="$orig_protocol"
+  IPERF_DEEP_METRICS="$orig_deep"
 }
