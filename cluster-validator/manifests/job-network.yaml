@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: network-validation
+  namespace: openshift-testing
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: cluster-validator
+      containers:
+        - name: network-validation
+          image: ghcr.io/tomazb/openshift-testing/cluster-validator:latest
+          env:
+            - name: VALIDATOR
+              value: network
+          # Uncomment to override individual config variables:
+          # - name: IPERF_NAMESPACE
+          #   value: network-validation
+          # - name: IPERF_DURATION
+          #   value: "30"
+          volumeMounts: []
+          # Uncomment to supply a full config file via ConfigMap:
+          # volumeMounts:
+          #   - name: config
+          #     mountPath: /config
+          #     readOnly: true
+          # Uncomment to persist artifacts to a PVC:
+          #   - name: artifacts
+          #     mountPath: /artifacts
+      volumes: []
+      # volumes:
+      #   - name: config
+      #     configMap:
+      #       name: network-validation-config
+      #   - name: artifacts
+      #     persistentVolumeClaim:
+      #       claimName: network-validation-artifacts
