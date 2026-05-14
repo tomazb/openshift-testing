@@ -24,6 +24,7 @@ _SA_CA="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 _SA_NS_FILE="/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 if [[ -f "$_SA_TOKEN" && -f "$_SA_CA" && -f "$_SA_NS_FILE" ]]; then
   HOME_DIR="${HOME:-/tmp}"
+  export HOME="$HOME_DIR"
   mkdir -p "$HOME_DIR/.kube"
   _ns="$(cat "$_SA_NS_FILE")"
   cat >"$HOME_DIR/.kube/config" <<KUBECONFIG

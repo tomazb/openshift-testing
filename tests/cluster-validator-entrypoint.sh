@@ -102,6 +102,8 @@ grep -Fq '[[ -f "$_SA_TOKEN" && -f "$_SA_CA" && -f "$_SA_NS_FILE" ]]' "$REPO_ROO
 # shellcheck disable=SC2016
 grep -Fq 'HOME_DIR="${HOME:-/tmp}"' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
 # shellcheck disable=SC2016
+grep -Fq 'export HOME="$HOME_DIR"' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
+# shellcheck disable=SC2016
 grep -Fq 'cat >"$HOME_DIR/.kube/config"' "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
 
 # --- Test 8: VALIDATOR=all continues past a dns failure ---
