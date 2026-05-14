@@ -24,9 +24,12 @@ exit 2
 EOF
 chmod +x "$TESTS_DIR/openshift-tests"
 
+touch "$TMP_DIR/pull-secret.json"
+
 CONFIG_FILE="$TMP_DIR/validation.env"
 cat >"$CONFIG_FILE" <<EOF
 ARTIFACT_DIR="$TMP_DIR/artifacts"
+PULL_SECRET_FILE="$TMP_DIR/pull-secret.json"
 EOF
 
 test_name="[sig-network] DNS should provide DNS for services [Suite:k8s]"
