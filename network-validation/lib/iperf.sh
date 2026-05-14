@@ -354,8 +354,8 @@ all_actions() {
   run_same_node
   run_host_network
   run_pod_to_service
-  ovn_diagnostics
   run_node_metrics
+  ovn_diagnostics
   report
 }
 

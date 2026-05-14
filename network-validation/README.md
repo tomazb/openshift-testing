@@ -18,7 +18,7 @@ bash bin/ocp-network-validate menu
 
 # Run recommended TCP sequence
 # preflight → deploy → cross-node → same-node → host-network → pod-to-service
-# → OVN diagnostics → node-metrics → report
+# → node-metrics → OVN diagnostics → report
 bash bin/ocp-network-validate --yes all
 
 # Run with custom config

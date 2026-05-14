@@ -15,7 +15,7 @@ This project has not been tagged yet, so entries are grouped by commit date.
 
 ### Added
 
-- The `all` action now runs the full recommended topology sequence: preflight, deploy, cross-node, same-node, host-network, pod-to-service, OVN diagnostics, node-metrics, and report generation.
+- The `all` action now runs the full recommended topology sequence: preflight, deploy, cross-node, same-node, host-network, pod-to-service, node-metrics, OVN diagnostics, and report generation.
 - `IPERF_PARALLEL` now accepts `auto`, which detects the pod-side iperf3 version and uses four parallel streams for iperf3 versions newer than 3.16 or one stream for older versions.
 - Regression coverage now verifies `IPERF_PARALLEL=auto`, invalid parallel values, the new server-side readiness check, and OCP 4.14+ OVN pod/container layouts.
 
