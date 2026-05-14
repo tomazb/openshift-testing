@@ -13,12 +13,14 @@ NETWORK_CALLS="$TMP_DIR/network-calls"
 
 cat >"$DNS_STUB" <<'STUB'
 #!/usr/bin/env bash
+set -u
 printf '%s\n' "$*" >>"$DNS_CALLS_FILE"
 STUB
 chmod +x "$DNS_STUB"
 
 cat >"$NETWORK_STUB" <<'STUB'
 #!/usr/bin/env bash
+set -u
 printf '%s\n' "$*" >>"$NETWORK_CALLS_FILE"
 STUB
 chmod +x "$NETWORK_STUB"
@@ -80,11 +82,7 @@ reset_calls
 mkdir -p "$TMP_DIR/config"
 echo "# config" > "$TMP_DIR/config/validation.env"
 
-DNS_CALLS_FILE="$DNS_CALLS" NETWORK_CALLS_FILE="$NETWORK_CALLS" \
-DNS_VALIDATE="$DNS_STUB" NETWORK_VALIDATE="$NETWORK_STUB" \
-HOME="$TMP_DIR/home" \
-  bash "$REPO_ROOT/cluster-validator/bin/entrypoint.sh" \
-    --config-dir "$TMP_DIR/config"
+VALIDATOR=dns run_ep --config-dir "$TMP_DIR/config"
 
 grep -Fq -- "--config $TMP_DIR/config/validation.env --yes all" "$DNS_CALLS"
 
@@ -93,18 +91,19 @@ reset_calls
 FAIL_DNS_STUB="$TMP_DIR/fail-dns-stub"
 cat >"$FAIL_DNS_STUB" <<'STUB'
 #!/usr/bin/env bash
+set -u
 printf '%s\n' "$*" >>"$DNS_CALLS_FILE"
 exit 1
 STUB
 chmod +x "$FAIL_DNS_STUB"
 
+_saved_dns_stub="$DNS_STUB"
+DNS_STUB="$FAIL_DNS_STUB"
 set +e
-DNS_CALLS_FILE="$DNS_CALLS" NETWORK_CALLS_FILE="$NETWORK_CALLS" \
-DNS_VALIDATE="$FAIL_DNS_STUB" NETWORK_VALIDATE="$NETWORK_STUB" \
-HOME="$TMP_DIR/home" \
-  VALIDATOR=all bash "$REPO_ROOT/cluster-validator/bin/entrypoint.sh"
+VALIDATOR=all run_ep
 overall_rc=$?
 set -e
+DNS_STUB="$_saved_dns_stub"
 
 if [[ "$overall_rc" -eq 0 ]]; then
   echo "FAIL: expected non-zero exit when a validator fails" >&2
