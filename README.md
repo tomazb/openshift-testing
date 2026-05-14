@@ -43,8 +43,13 @@ The `network-validation/` directory contains an iperf3-based network throughput 
 - automated iperf3 server/client pod deployment on selected nodes
 - topology-aware test scenarios: cross-node, same-node, host-network, pod-to-service
 - CoreOS-compatible server/client artifact and metric collection via a mounted pod-side collector
-- OVN-Kubernetes diagnostics capture (logs, OVN DB state, GenEve tunnel stats)
+- dedicated deep node-level metrics collection
+- OVN-Kubernetes diagnostics capture with OpenShift-version-aware pod/container discovery
 - structured `Accepted`, `Accepted with risks`, or `Blocked` verdicts
 - markdown report generation
 
 See `network-validation/README.md` for usage instructions.
+
+## Planning docs
+
+Current design and implementation plans live under `docs/plans/`, including the approved `cluster-validator` plan for packaging DNS and network validation as in-cluster Kubernetes Jobs.
