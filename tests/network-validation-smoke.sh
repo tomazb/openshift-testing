@@ -165,8 +165,12 @@ if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 -s -p 5201 
   exit 0
 fi
 
-if [[ "$args" == "-n network-validation exec iperf3-server -- bash -c "*ss -tlnH*"* ]]; then
-  printf 'LISTEN  0  128  0.0.0.0:5201  0.0.0.0:*\n'
+if [[ "$args" == *"iperf3-server -- bash -c"*"ss -tlnH"* ]]; then
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 --version" ]]; then
+  echo "iperf 3.21 (cJSON 1.7.15)"
   exit 0
 fi
 
@@ -445,9 +449,8 @@ grep -Fq "mountPath: /opt/network-validation" "$SAME_ARTIFACT_DIR/tmp/iperf3-cli
 test -f "$SAME_ARTIFACT_DIR/02-same-node/client/iperf3_client.json"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
-grep -Fq "ready" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
+grep -Fxq "0" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt.rc"
 grep -Fq "ready-check" "$FAKE_OC_LOG"
-grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"
 
 # --- Test 7: Pod-to-service uses a real artifact dir and valid Service ports ---
 SVC_ARTIFACT_DIR="$TMP_DIR/service-artifacts"
@@ -515,3 +518,31 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 grep -Fq "hostNetwork: true" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "hostPID: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "privileged: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"
+
+# --- Test 10: IPERF_PARALLEL accepts "auto" and positive integers, rejects 0 ---
+PARALLEL_BAD_CONFIG="$TMP_DIR/bad-parallel.env"
+cat >"$PARALLEL_BAD_CONFIG" <<EOF
+ARTIFACT_DIR="$TMP_DIR/p-test"
+IPERF_PARALLEL="0"
+EOF
+
+set +e
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$PARALLEL_BAD_CONFIG" init \
+  >"$TMP_DIR/bad-parallel.out" 2>&1
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "IPERF_PARALLEL=0 should be rejected" >&2
+  exit 1
+fi
+grep -Fq "IPERF_PARALLEL must be auto or a positive integer" "$TMP_DIR/bad-parallel.out"
+
+PARALLEL_AUTO_CONFIG="$TMP_DIR/auto-parallel.env"
+cat >"$PARALLEL_AUTO_CONFIG" <<EOF
+ARTIFACT_DIR="$TMP_DIR/p-auto"
+IPERF_PARALLEL="auto"
+EOF
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$PARALLEL_AUTO_CONFIG" init

@@ -12,6 +12,7 @@ run_iperf_test() {
   mkdir -p "$client_dir" "$server_dir"
 
   [[ -n "$target_ip" ]] || fail "No target IP for scenario $scenario."
+  auto_configure_parallel
   log "Running iperf3 $scenario test: client -> $target_ip (${IPERF_PROTOCOL}, ${IPERF_DURATION}s)"
 
   local command_timeout=$((IPERF_DURATION + 30))
@@ -86,6 +87,32 @@ wait_for_iperf_server() {
   log "Waiting for iperf3 server readiness on $target_ip:$IPERF_PORT..."
   run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
     bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$IPERF_PORT"
+}
+
+# Resolve IPERF_PARALLEL="auto" by querying the iperf3 binary version in the server pod.
+# Sets IPERF_PARALLEL to 4 when iperf3 > 3.16 (multi-core -P support is reliable),
+# or 1 for older versions. No-op when IPERF_PARALLEL is already a concrete integer.
+auto_configure_parallel() {
+  [[ "$IPERF_PARALLEL" == "auto" ]] || return 0
+  log "Auto-detecting iperf3 version for parallel stream config..."
+  local version_output version major minor
+  version_output="$(oc -n "$IPERF_NAMESPACE" exec iperf3-server -- iperf3 --version 2>/dev/null || true)"
+  version="$(awk 'NR==1{print $2}' <<<"$version_output")"
+  if [[ "$version" =~ ^([0-9]+)\.([0-9]+) ]]; then
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+  else
+    IPERF_PARALLEL=1
+    warn "Could not detect iperf3 version; using IPERF_PARALLEL=1"
+    return 0
+  fi
+  if [[ "$major" -gt 3 ]] || { [[ "$major" -eq 3 ]] && [[ "$minor" -gt 16 ]]; }; then
+    IPERF_PARALLEL=4
+    log "iperf3 $version detected (>3.16): using IPERF_PARALLEL=4"
+  else
+    IPERF_PARALLEL=1
+    log "iperf3 $version detected (≤3.16): using IPERF_PARALLEL=1"
+  fi
 }
 
 retrieve_collector_artifacts() {
@@ -275,6 +302,9 @@ run_same_node() {
   # Restore original client node for subsequent tests
   IPERF_CLIENT_NODE="$orig_client"
   IPERF_FORCE_SAME_NODE="$orig_force"
+  # Persist the restored client node so subsequent read_runtime calls
+  # don't reload the stale same-node value.
+  write_runtime_kv IPERF_CLIENT_NODE "${orig_client}"
 }
 
 run_host_network() {
@@ -321,6 +351,9 @@ all_actions() {
   preflight
   deploy_pods
   run_cross_node
+  run_same_node
+  run_host_network
+  run_pod_to_service
   ovn_diagnostics
   run_node_metrics
   report
