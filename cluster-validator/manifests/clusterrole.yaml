@@ -1,0 +1,44 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-validator
+rules:
+  # Core — cluster topology and identity
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, create, delete]
+  # Core — pod lifecycle and diagnostics
+  - apiGroups: [""]
+    resources: [pods, pods/log, pods/exec]
+    verbs: [get, list, create, delete, watch]
+  # Core — services, configmaps, endpoints
+  - apiGroups: [""]
+    resources: [services, configmaps, endpoints]
+    verbs: [get, list, create, delete, watch]
+  # Core — events
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list]
+  # apps — DaemonSets (node sweep, OVN inspection)
+  - apiGroups: [apps]
+    resources: [daemonsets]
+    verbs: [get, list, create, delete, watch]
+  # OpenShift cluster config
+  - apiGroups: [config.openshift.io]
+    resources: [clusterversions, clusteroperators, networks, ingresses]
+    verbs: [get, list]
+  # OpenShift operator config (DNS and network operators)
+  - apiGroups: [operator.openshift.io]
+    resources: [dnses, networks]
+    verbs: [get, list]
+  # Routes (console route lookup in dns preflight)
+  - apiGroups: [route.openshift.io]
+    resources: [routes]
+    verbs: [get]
+  # EndpointSlices (dns preflight)
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list]
