@@ -53,20 +53,29 @@ EOF
   exit 1
 }
 
+require_value() {
+  local option="$1" value="$2"
+  if [[ -z "$value" || "$value" == -* ]]; then
+    echo "ERROR: $option requires a value" >&2
+    usage
+  fi
+  printf '%s\n' "$value"
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -r|--role) ROLE="$2"; shift 2 ;;
-      -t|--target) TARGET="$2"; shift 2 ;;
-      -d|--duration) DURATION="$2"; shift 2 ;;
-      -b|--bandwidth) BANDWIDTH="$2"; shift 2 ;;
-      -p|--protocol) PROTOCOL="$2"; shift 2 ;;
-      -l|--packet-size) PACKET_SIZE="$2"; shift 2 ;;
-      -w|--window) SOCKET_BUFFER="$2"; shift 2 ;;
-      -P|--parallel) PARALLEL="$2"; shift 2 ;;
-      -i|--interface) INTERFACE="$2"; shift 2 ;;
-      -o|--output) OUTPUT_DIR="$2"; shift 2 ;;
-      --port) SERVER_PORT="$2"; shift 2 ;;
+      -r|--role) ROLE="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -t|--target) TARGET="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -d|--duration) DURATION="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -b|--bandwidth) BANDWIDTH="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -p|--protocol) PROTOCOL="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -l|--packet-size) PACKET_SIZE="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -w|--window) SOCKET_BUFFER="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -P|--parallel) PARALLEL="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -i|--interface) INTERFACE="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      -o|--output) OUTPUT_DIR="$(require_value "$1" "${2:-}")"; shift 2 ;;
+      --port) SERVER_PORT="$(require_value "$1" "${2:-}")"; shift 2 ;;
       -h|--help) usage ;;
       *) echo "Unknown option: $1"; usage ;;
     esac
@@ -357,12 +366,15 @@ run_server() {
   echo "Server PID: $IPERF_PID, Metrics PID: $METRIC_PID"
   echo "Waiting for client connection..."
 
-  wait "$IPERF_PID" || true
+  local rc=0
+  wait "$IPERF_PID" || rc=$?
   IPERF_PID=""
+  echo "$rc" > "$LOG_DIR/iperf3_server.rc"
 
   stop_background_jobs
   collect_posttest
   echo "Server test complete. Results in $LOG_DIR"
+  return "$rc"
 }
 
 run_client() {
@@ -384,8 +396,10 @@ run_client() {
   iperf3 "${iperf_args[@]}" > "$LOG_DIR/iperf3_client.json" 2>"$LOG_DIR/iperf3_client.stderr" &
   IPERF_PID=$!
 
-  wait "$IPERF_PID" || true
+  local rc=0
+  wait "$IPERF_PID" || rc=$?
   IPERF_PID=""
+  echo "$rc" > "$LOG_DIR/iperf3_client.rc"
 
   stop_background_jobs
   collect_posttest
@@ -409,6 +423,7 @@ run_client() {
   fi
 
   echo "Client test complete. Results in $LOG_DIR"
+  return "$rc"
 }
 
 # --- Main ---

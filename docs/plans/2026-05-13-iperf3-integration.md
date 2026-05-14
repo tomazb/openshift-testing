@@ -1,7 +1,5 @@
 # iperf3 Metrics Collector — Integration Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Three-layer improvement of iperf3 metric collection: standalone script quality (Layer C), `--deep` flag for pod-side collector and `IPERF_DEEP_METRICS` pass-through (Layer A), and a dedicated `node-metrics` subcommand (Layer B).
 
 **Architecture:** Layer C adds the standalone script to static checks, a smoke test, and a README. Layer A extends `network-validation/lib/iperf3-collector.sh` with a `--deep` flag enabling 10 extra metric streams from `/proc`, then wires `IPERF_DEEP_METRICS=true` to pass `--deep` in all existing iperf3 test invocations. Layer B adds a `node-metrics` subcommand that runs a dedicated iperf3 test with deep metrics on two cluster nodes, saving artifacts in `05-node-metrics/`. Implementation order: C → A (--deep flag) → B → A (pass-through).

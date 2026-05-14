@@ -16,7 +16,7 @@ SERVER_PORT="5201"
 LOG_DIR=""
 IPERF_PID=""
 METRIC_PID=""
-DEEP="false"
+DEEP="${DEEP:-false}"
 MPSTAT_PID=""
 
 usage() {
@@ -187,24 +187,24 @@ collect_continuous_metrics() {
     prev_cpu_line="$cur_cpu_line"
     awk -v ts="$ts" -v iface="$INTERFACE" '$1 == iface ":" {gsub(":",""); printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", ts, $1, $2, $3, $4, $5, $10, $11, $12, $13}' /proc/net/dev >>"$netdev_file" 2>/dev/null || true
     if [[ "$DEEP" == "true" ]]; then
-      awk -v ts="$ts" '/NET_RX|NET_TX/ {printf "%s,%s", ts, $1; for(i=2;i<=NF;i++) printf ",%s", $i; print ""}' /proc/softirqs >> "$LOG_DIR/03_softirq.log" 2>/dev/null || true
-      awk -v ts="$ts" '/^TcpExt:|^IpExt:/ {printf "%s,%s\n", ts, $0}' /proc/net/netstat >> "$LOG_DIR/04_tcpext.log" 2>/dev/null || true
+      awk -v ts="$ts" '/NET_RX|NET_TX/ {printf "%s,%s", ts, $1; for(i=2;i<=NF;i++) printf ",%s", $i; print ""}' /proc/softirqs >> "$LOG_DIR/03_softirqs.log" 2>/dev/null || true
+      awk -v ts="$ts" '/^TcpExt:|^IpExt:/ {printf "%s,%s\n", ts, $0}' /proc/net/netstat >> "$LOG_DIR/04_netstat.log" 2>/dev/null || true
       awk -v ts="$ts" '/^Udp:|^Tcp:/ {printf "%s,%s\n", ts, $0}' /proc/net/snmp >> "$LOG_DIR/05_snmp.log" 2>/dev/null || true
       awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' /proc/net/sockstat >> "$LOG_DIR/06_sockstat.log" 2>/dev/null || true
       awk -v ts="$ts" '/^MemTotal:|^MemFree:|^MemAvailable:|^Buffers:|^Cached:/ {printf "%s,%s,%s\n", ts, $1, $2}' /proc/meminfo >> "$LOG_DIR/07_memory.log" 2>/dev/null || true
       awk -v ts="$ts" '{printf "%s,%s,%s,%s\n", ts, $1, $2, $3}' /proc/loadavg >> "$LOG_DIR/08_loadavg.log" 2>/dev/null || true
-      if [[ $(( sec % 2 )) -eq 0 ]]; then
-        { echo "--- TIMESTAMP $ts ---"; ethtool -S "$INTERFACE" 2>/dev/null || true; } >> "$LOG_DIR/10_ethtool_stats.log" || true
+      if command_available ethtool && [[ $(( sec % 2 )) -eq 0 ]]; then
+        { echo "--- TIMESTAMP $ts ---"; ethtool -S "$INTERFACE" 2>/dev/null || true; } >> "$LOG_DIR/10_ethtool_S.log" || true
       fi
       if command_available ss; then
         if [[ "$PROTOCOL" == "udp" ]]; then
-          ss -uanmp 2>/dev/null | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss.log" || true
+          ss -uanmp 2>/dev/null | grep -E "iperf3|UNCONN|ESTAB" | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss_sockets.log" || true
         else
-          ss -tanmp 2>/dev/null | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss.log" || true
+          ss -tanmp 2>/dev/null | grep -E "iperf3|ESTAB|LISTEN" | awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' >> "$LOG_DIR/11_ss_sockets.log" || true
         fi
       fi
       if [[ -f /proc/pressure/cpu ]]; then
-        awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' /proc/pressure/cpu >> "$LOG_DIR/13_psi.log" 2>/dev/null || true
+        awk -v ts="$ts" '{printf "%s,%s\n", ts, $0}' /proc/pressure/cpu >> "$LOG_DIR/13_pressure.log" 2>/dev/null || true
       fi
     fi
     sleep 1
@@ -212,6 +212,7 @@ collect_continuous_metrics() {
 }
 
 collect_posttest() {
+  [[ -n "${LOG_DIR:-}" ]] || return 0
   {
     echo "=== Post-test collected at $(date -Iseconds) ==="
     ip -s link show "$INTERFACE" 2>/dev/null || true

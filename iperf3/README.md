@@ -72,8 +72,9 @@ oc debug node/<client-node> -- chroot /host bash -c \
 ## Retrieving artifacts from the debug pod
 
 ```bash
-# From a separate terminal while the debug pod is still running:
-# (artifacts land under /host/tmp/ from the pod's perspective because the script runs inside chroot /host)
+# From a separate terminal while the debug pod is still running.
+# The script runs inside `chroot /host`, so `-o /tmp/iperf3-*` is visible
+# as `/host/tmp/iperf3-*` from outside the chroot (inside the debug pod).
 oc exec <debug-pod-name> -- tar -cf - /host/tmp/iperf3-client | tar -xf - -C ./local-artifacts/
 oc exec <debug-pod-name> -- tar -cf - /host/tmp/iperf3-server | tar -xf - -C ./local-artifacts/
 

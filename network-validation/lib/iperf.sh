@@ -31,7 +31,7 @@ run_iperf_test() {
       --window "$IPERF_SOCKET_BUFFER" \
       --interface "$IPERF_INTERFACE" \
       --output "$server_remote_dir" \
-      ${collector_extra_args:+"${collector_extra_args[@]}"} \
+      "${collector_extra_args[@]}" \
     > "$server_dir/collector.stdout" 2>"$server_dir/collector.stderr" &
   local server_pid=$!
 
@@ -59,7 +59,7 @@ run_iperf_test() {
       --packet-size "$IPERF_PACKET_SIZE" \
       --interface "$IPERF_INTERFACE" \
       --output "$client_remote_dir" \
-      ${collector_extra_args:+"${collector_extra_args[@]}"} \
+      "${collector_extra_args[@]}" \
     > "$client_dir/collector.stdout" 2>"$client_dir/collector.stderr" || client_rc=$?
 
   local server_rc=0
@@ -102,16 +102,16 @@ retrieve_collector_artifacts() {
     iperf3_server.json
     iperf3_server.stderr
     iperf3_server.rc
-    03_softirq.log
-    04_tcpext.log
+    03_softirqs.log
+    04_netstat.log
     05_snmp.log
     06_sockstat.log
     07_memory.log
     08_loadavg.log
-    10_ethtool_stats.log
-    11_ss.log
+    10_ethtool_S.log
+    11_ss_sockets.log
     12_mpstat.log
-    13_psi.log
+    13_pressure.log
   )
   mkdir -p "$local_dir"
   for f in "${files[@]}"; do
@@ -337,6 +337,7 @@ run_node_metrics() {
   IPERF_DEEP_METRICS="true"
 
   local d="$ARTIFACT_DIR/05-node-metrics"
+  mkdir -p "$d"
   collect_pod_baseline "iperf3-server" "$d"
   collect_pod_baseline "iperf3-client" "$d"
 
