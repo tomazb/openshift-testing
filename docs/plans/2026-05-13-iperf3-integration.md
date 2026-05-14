@@ -8,7 +8,7 @@
 
 ---
 
-### Task 1: Layer C — Add standalone script to static checks
+## Task 1: Layer C — Add standalone script to static checks
 
 **Files:**
 - Modify: `scripts/check-static.sh`
@@ -40,7 +40,7 @@ bash -n iperf3/iperf3-network-metrics-collector.sh
 ```
 
 In the `shellcheck` invocation (after `network-validation/lib/results.sh \`), add:
-```
+```text
   iperf3/iperf3-network-metrics-collector.sh \
 ```
 
@@ -61,7 +61,7 @@ git commit -m "chore: add standalone iperf3 collector to static checks"
 
 ---
 
-### Task 2: Layer C — Smoke test for standalone script
+## Task 2: Layer C — Smoke test for standalone script
 
 **Files:**
 - Create: `tests/iperf3-collector-smoke.sh`
@@ -154,7 +154,7 @@ git commit -m "test: smoke test for standalone iperf3 collector"
 
 ---
 
-### Task 3: Layer C — README for standalone script
+## Task 3: Layer C — README for standalone script
 
 **Files:**
 - Create: `iperf3/README.md`
@@ -264,7 +264,6 @@ awk -F',' '/Udp:/ {print}' local-artifacts/05_snmp.log | tail -4
 - `iperf3`
 - Standard Linux tools: `ip`, `awk`, `grep`, `date`
 - Optional (gracefully skipped if absent): `ethtool`, `ss`, `mpstat`, `conntrack`, `lscpu`
-```
 
 **Step 2: Verify the file is tracked by git**
 
@@ -283,7 +282,7 @@ git commit -m "docs: add README for standalone iperf3 collector"
 
 ---
 
-### Task 4: Layer A (part 1) — Add `--deep` flag to pod-side iperf3-collector.sh
+## Task 4: Layer A (part 1) — Add `--deep` flag to pod-side iperf3-collector.sh
 
 **Files:**
 - Modify: `network-validation/lib/iperf3-collector.sh`
@@ -303,7 +302,7 @@ MPSTAT_PID=""
 **Step 2: Add `--deep` to `usage()` and `parse_args()`**
 
 In `usage()`, after `  --port PORT           iperf3 server port`, add:
-```
+```text
   --deep                Enable extended metric collection (softirqs, sockstat, PSI, mpstat, etc.)
 ```
 
@@ -409,7 +408,7 @@ git commit -m "feat(network-validation): add --deep flag to pod-side iperf3 coll
 
 ---
 
-### Task 5: Layer B — `run_node_metrics()` and artifact retrieval update
+## Task 5: Layer B — `run_node_metrics()` and artifact retrieval update
 
 **Files:**
 - Modify: `network-validation/lib/iperf.sh`
@@ -504,7 +503,7 @@ git commit -m "feat(network-validation): add run_node_metrics() and expand artif
 
 ---
 
-### Task 6: Layer B — Wire up `node-metrics` subcommand, menu, and config
+## Task 6: Layer B — Wire up `node-metrics` subcommand, menu, and config
 
 **Files:**
 - Modify: `network-validation/bin/ocp-network-validate`
@@ -537,14 +536,14 @@ After the existing `IPERF_MAX_RETRANSMITS` validation, add:
 **Step 3: Update `usage()`**
 
 In the Actions list in `usage()`, add after `pod-to-service`:
-```
+```text
   node-metrics         Run dedicated node-level metrics collection (deep, 120 s by default)
 ```
 
 **Step 4: Add menu entry**
 
 In the `cat <<MENU` heredoc, add after ` 12) Show artifact paths`:
-```
+```text
  13) Run node-level metrics collection
 ```
 
@@ -594,7 +593,7 @@ git commit -m "feat(network-validation): add node-metrics subcommand, menu entry
 
 ---
 
-### Task 7: Layer A (part 2) — Pass `--deep` in `run_iperf_test()` when `IPERF_DEEP_METRICS=true`
+## Task 7: Layer A (part 2) — Pass `--deep` in `run_iperf_test()` when `IPERF_DEEP_METRICS=true`
 
 **Files:**
 - Modify: `network-validation/lib/iperf.sh`
@@ -642,7 +641,7 @@ git commit -m "feat(network-validation): pass --deep to collectors when IPERF_DE
 
 ---
 
-### Task 8: Final verification
+## Task 8: Final verification
 
 **Step 1: Full static check**
 
