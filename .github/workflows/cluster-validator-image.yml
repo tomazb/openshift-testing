@@ -1,0 +1,99 @@
+name: Cluster validator image
+
+on:
+  pull_request:
+    paths:
+      - cluster-validator/**
+      - dns-validation/**
+      - network-validation/**
+  push:
+    branches:
+      - main
+    paths:
+      - cluster-validator/**
+      - dns-validation/**
+      - network-validation/**
+    tags:
+      - "cluster-validator-v*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/cluster-validator
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image for smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: cluster-validator/Containerfile
+          load: true
+          platforms: linux/amd64
+          tags: cluster-validator:test
+
+      - name: Smoke test image
+        run: |
+          docker run --rm cluster-validator:test bash -euxo pipefail -c '
+            command -v validator
+            test -f /opt/openshift-testing/dns-validation/bin/ocp-dns-validate
+            test -f /opt/openshift-testing/network-validation/bin/ocp-network-validate
+            test -d /artifacts
+            test -d /config
+          '
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        if: github.event_name == 'push'
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push image
+        if: github.event_name == 'push'
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: cluster-validator/Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Generate build provenance
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
