@@ -111,11 +111,11 @@ cleanup() {
   if [[ -n "${METRIC_PID:-}" ]] || [[ -n "${IPERF_PID:-}" ]]; then
     echo "Cleaning up..."
   fi
-  [[ -n "${IPERF_PID:-}" ]]   && kill "$IPERF_PID"   2>/dev/null || true
-  [[ -n "${METRIC_PID:-}" ]]  && kill "$METRIC_PID"  2>/dev/null || true
-  [[ -n "${MPSTAT_PID:-}" ]]  && kill "$MPSTAT_PID"  2>/dev/null || true
-  [[ -n "${METRIC_PID:-}" ]]  && wait "$METRIC_PID"  2>/dev/null || true
-  [[ -n "${MPSTAT_PID:-}" ]]  && wait "$MPSTAT_PID"  2>/dev/null || true
+  if [[ -n "${IPERF_PID:-}" ]];   then kill "$IPERF_PID"   2>/dev/null || true; fi
+  if [[ -n "${METRIC_PID:-}" ]];  then kill "$METRIC_PID"  2>/dev/null || true; fi
+  if [[ -n "${MPSTAT_PID:-}" ]];  then kill "$MPSTAT_PID"  2>/dev/null || true; fi
+  if [[ -n "${METRIC_PID:-}" ]];  then wait "$METRIC_PID"  2>/dev/null || true; fi
+  if [[ -n "${MPSTAT_PID:-}" ]];  then wait "$MPSTAT_PID"  2>/dev/null || true; fi
   collect_posttest 2>/dev/null || true
 }
 
@@ -336,10 +336,10 @@ collect_posttest() {
 }
 
 stop_background_jobs() {
-  [[ -n "${METRIC_PID:-}" ]] && kill "$METRIC_PID" 2>/dev/null || true
-  [[ -n "${MPSTAT_PID:-}" ]] && kill "$MPSTAT_PID" 2>/dev/null || true
-  [[ -n "${METRIC_PID:-}" ]] && wait "$METRIC_PID" 2>/dev/null || true
-  [[ -n "${MPSTAT_PID:-}" ]] && wait "$MPSTAT_PID" 2>/dev/null || true
+  if [[ -n "${METRIC_PID:-}" ]]; then kill "$METRIC_PID" 2>/dev/null || true; fi
+  if [[ -n "${MPSTAT_PID:-}" ]]; then kill "$MPSTAT_PID" 2>/dev/null || true; fi
+  if [[ -n "${METRIC_PID:-}" ]]; then wait "$METRIC_PID" 2>/dev/null || true; fi
+  if [[ -n "${MPSTAT_PID:-}" ]]; then wait "$MPSTAT_PID" 2>/dev/null || true; fi
   METRIC_PID=""
   MPSTAT_PID=""
 }
