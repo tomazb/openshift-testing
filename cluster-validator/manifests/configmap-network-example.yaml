@@ -1,0 +1,32 @@
+# Copy this file, remove the -example suffix, and uncomment variables you want to override.
+# Mount the ConfigMap in job-network.yaml under /config.
+#
+# oc create -f configmap-network.yaml -n openshift-testing
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-validation-config
+  namespace: openshift-testing
+data:
+  validation.env: |
+    # Temporary namespace used for iperf3 pods.
+    # IPERF_NAMESPACE="network-validation"
+
+    # Pin specific nodes (leave empty for auto-selection).
+    # IPERF_SERVER_NODE=""
+    # IPERF_CLIENT_NODE=""
+
+    # iperf3 test duration in seconds.
+    # IPERF_DURATION="30"
+
+    # Protocol: tcp or udp.
+    # IPERF_PROTOCOL="tcp"
+
+    # Minimum acceptable throughput in Gbps (0 = skip threshold check).
+    # IPERF_MIN_THROUGHPUT_GBPS="0"
+
+    # Enable extended deep metrics collection.
+    # IPERF_DEEP_METRICS="false"
+
+    # Pod image (default: network-testing-image from GHCR).
+    # IPERF_IMAGE="ghcr.io/tomazb/openshift-testing/network-testing-image:latest"

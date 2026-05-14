@@ -1,0 +1,35 @@
+# Copy this file, remove the -example suffix, and uncomment variables you want to override.
+# Mount the ConfigMap in job-dns.yaml under /config.
+#
+# oc create -f configmap-dns.yaml -n openshift-testing
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dns-validation-config
+  namespace: openshift-testing
+data:
+  validation.env: |
+    # Temporary namespace used for node sweep and dnsperf workloads.
+    # VALIDATION_NAMESPACE="dns-validation"
+
+    # Pull secret — required only for extract-tests / run-dns-tests.
+    # Mount a Secret containing pull-secret.json and set the path here.
+    # PULL_SECRET_FILE="/secrets/pull-secret.json"
+
+    # DNS conformance test filter regex.
+    # DNS_TEST_REGEX="dns|\[sig-network\].*DNS"
+
+    # Pipe-separated test names to exclude; leave empty to run all matches.
+    # DNS_TEST_EXCLUDE_REGEX=""
+
+    # Node-level DNS sweep image.
+    # DNS_SWEEP_IMAGE="registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3"
+
+    # dnsperf image.
+    # DNSPERF_IMAGE="docker.io/guessi/dnsperf:2.15.1-1"
+
+    # dnsperf QPS ladder steps.
+    # DNSPERF_QPS_STEPS="100 500 1000 2000"
+
+    # Seconds per QPS step.
+    # DNSPERF_DURATION_SECONDS="60"
