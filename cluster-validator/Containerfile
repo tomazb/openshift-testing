@@ -1,0 +1,10 @@
+FROM ghcr.io/tomazb/openshift-testing/network-testing-image:latest
+
+COPY dns-validation/     /opt/openshift-testing/dns-validation/
+COPY network-validation/ /opt/openshift-testing/network-validation/
+COPY cluster-validator/bin/entrypoint.sh /usr/local/bin/validator
+
+RUN chmod +x /usr/local/bin/validator \
+    && mkdir -p /artifacts /config
+
+ENTRYPOINT ["/usr/local/bin/validator"]
