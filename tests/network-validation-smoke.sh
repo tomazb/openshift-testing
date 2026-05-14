@@ -393,10 +393,10 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" ovn-diagnostics
 
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-control-plane-logs.txt"
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-node-a-nbctl-show.txt"
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/ovnkube-control-plane-logs.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/ovnkube-node-a-nbctl-show.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
 grep -Fq "ovnkube-node-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-a" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-b" "$FAKE_OC_LOG"
@@ -415,12 +415,12 @@ EOF
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" report
 
-test -f "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+test -f "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
 
 # --- Test 6: Direct same-node action pins both pods to one node ---
 SAME_ARTIFACT_DIR="$TMP_DIR/same-node-artifacts"
@@ -477,8 +477,8 @@ grep -Fq "name: udp" "$SVC_ARTIFACT_DIR/tmp/iperf3-service.yaml"
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$SVC_CONFIG" report
 
-grep -Fq "## Pod-to-service network" "$SVC_ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Throughput: 9.5 Gbps" "$SVC_ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "## Pod-to-service network" "$SVC_ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Throughput: 9.5 Gbps" "$SVC_ARTIFACT_DIR/07-report/network-validation-report.md"
 
 # --- Test 8: iperf client failures become reportable validation results ---
 FAIL_ARTIFACT_DIR="$TMP_DIR/fail-artifacts"
@@ -499,7 +499,7 @@ grep -Fq "client_rc=7" "$FAIL_ARTIFACT_DIR/01-cross-node/iperf3_summary.txt"
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$FAIL_CONFIG" report
 
-grep -Fq -- "- Verdict: Blocked" "$FAIL_ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq -- "- Verdict: Blocked" "$FAIL_ARTIFACT_DIR/07-report/network-validation-report.md"
 
 # --- Test 9: Host-network metrics can run in best-effort restricted mode ---
 BEST_EFFORT_ARTIFACT_DIR="$TMP_DIR/best-effort-artifacts"

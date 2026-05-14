@@ -103,7 +103,7 @@ ovn_diagnostics() {
     return 0
   fi
 
-  local d="$ARTIFACT_DIR/05-ovn-diagnostics"
+  local d="$ARTIFACT_DIR/06-ovn-diagnostics"
   local rc=0
   mkdir -p "$d"
 

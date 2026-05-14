@@ -19,9 +19,9 @@ results_add_blocking_reason() {
   local reason="$1"
   local artifact="${2:-}"
   if [[ -n "$artifact" ]]; then
-    printf -- "- %s (artifact: \`%s\`)\n" "$reason" "$artifact" >> "$ARTIFACT_DIR/06-report/verdict-blocking-reasons.txt"
+    printf -- "- %s (artifact: \`%s\`)\n" "$reason" "$artifact" >> "$ARTIFACT_DIR/07-report/verdict-blocking-reasons.txt"
   else
-    printf -- '- %s\n' "$reason" >> "$ARTIFACT_DIR/06-report/verdict-blocking-reasons.txt"
+    printf -- '- %s\n' "$reason" >> "$ARTIFACT_DIR/07-report/verdict-blocking-reasons.txt"
   fi
 }
 
@@ -29,9 +29,9 @@ results_add_risk_reason() {
   local reason="$1"
   local artifact="${2:-}"
   if [[ -n "$artifact" ]]; then
-    printf -- "- %s (artifact: \`%s\`)\n" "$reason" "$artifact" >> "$ARTIFACT_DIR/06-report/verdict-risk-reasons.txt"
+    printf -- "- %s (artifact: \`%s\`)\n" "$reason" "$artifact" >> "$ARTIFACT_DIR/07-report/verdict-risk-reasons.txt"
   else
-    printf -- '- %s\n' "$reason" >> "$ARTIFACT_DIR/06-report/verdict-risk-reasons.txt"
+    printf -- '- %s\n' "$reason" >> "$ARTIFACT_DIR/07-report/verdict-risk-reasons.txt"
   fi
 }
 
@@ -82,7 +82,7 @@ results_evaluate_scenario() {
 }
 
 results_compute_verdict() {
-  local d="$ARTIFACT_DIR/06-report"
+  local d="$ARTIFACT_DIR/07-report"
   mkdir -p "$d"
   : > "$d/verdict-blocking-reasons.txt"
   : > "$d/verdict-risk-reasons.txt"
@@ -124,7 +124,7 @@ results_compute_verdict() {
 }
 
 results_verdict() {
-  cat "$ARTIFACT_DIR/06-report/verdict.txt" 2>/dev/null || echo "Not computed"
+  cat "$ARTIFACT_DIR/07-report/verdict.txt" 2>/dev/null || echo "Not computed"
 }
 
 # Render a scenario section for the report.
@@ -177,18 +177,18 @@ render_results_summary() {
 - Verdict: $verdict
 EOF
 
-  if [[ -s "$ARTIFACT_DIR/06-report/verdict-blocking-reasons.txt" ]]; then
+  if [[ -s "$ARTIFACT_DIR/07-report/verdict-blocking-reasons.txt" ]]; then
     echo ""
     echo "### Blocking reasons"
     echo ""
-    cat "$ARTIFACT_DIR/06-report/verdict-blocking-reasons.txt"
+    cat "$ARTIFACT_DIR/07-report/verdict-blocking-reasons.txt"
   fi
 
-  if [[ -s "$ARTIFACT_DIR/06-report/verdict-risk-reasons.txt" ]]; then
+  if [[ -s "$ARTIFACT_DIR/07-report/verdict-risk-reasons.txt" ]]; then
     echo ""
     echo "### Risk factors"
     echo ""
-    cat "$ARTIFACT_DIR/06-report/verdict-risk-reasons.txt"
+    cat "$ARTIFACT_DIR/07-report/verdict-risk-reasons.txt"
   fi
 }
 
@@ -200,7 +200,7 @@ report() {
   local verdict
   verdict="$(results_verdict)"
 
-  local f="$ARTIFACT_DIR/06-report/network-validation-report.md"
+  local f="$ARTIFACT_DIR/07-report/network-validation-report.md"
   local summary
   summary="$(render_results_summary)"
 
