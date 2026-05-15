@@ -8,6 +8,13 @@
 
 **Tech Stack:** Bash, Podman/Docker, GitHub Actions `docker/build-push-action`, Kubernetes/OpenShift YAML, GHCR.
 
+**Final PR note:** This original implementation plan was later amended by
+`docs/superpowers/plans/2026-05-15-cluster-validator-rbac-and-pull-secret.md`.
+The final PR uses pre-created `dns-validation` and `network-validation`
+namespaces, a read-only discovery ClusterRole plus namespaced runtime Roles,
+OpenShift component read-only diagnostic Roles, and an
+`openshift-config/pull-secret` fallback for DNS conformance.
+
 ---
 
 ## Reading before you start
@@ -218,7 +225,7 @@ Expected: error like `bash: .../cluster-validator/bin/entrypoint.sh: No such fil
 - Delete: `cluster-validator/bin/.gitkeep`
 
 The entrypoint:
-1. Generates `/root/.kube/config` from the pod's service account token if in-cluster creds exist — so `oc` can reach the API server without an externally-supplied kubeconfig.
+1. Generates `$HOME/.kube/config` from the pod's service account token when token, CA, and namespace files exist — so `oc` can reach the API server without an externally-supplied kubeconfig.
 2. Determines `ARTIFACT_DIR` (defaults to `/artifacts`).
 3. Resolves the config file flag from `--config-dir` or the fixed `/config/validation.env` path.
 4. Dispatches to `ocp-dns-validate`, `ocp-network-validate`, or both based on `VALIDATOR`.
@@ -235,10 +242,14 @@ set -Eeuo pipefail
 DNS_VALIDATE="${DNS_VALIDATE:-/opt/openshift-testing/dns-validation/bin/ocp-dns-validate}"
 NETWORK_VALIDATE="${NETWORK_VALIDATE:-/opt/openshift-testing/network-validation/bin/ocp-network-validate}"
 VALIDATOR="${VALIDATOR:-dns}"
-CONFIG_DIR="/config"
+CONFIG_DIR="${CONFIG_DIR:-/config}"
 
 # Allow --config-dir override (used by smoke tests to inject a custom config dir)
 if [[ "${1:-}" == "--config-dir" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "ERROR: --config-dir requires an argument." >&2
+    exit 2
+  fi
   CONFIG_DIR="$2"
   shift 2
 fi
@@ -247,10 +258,12 @@ fi
 _SA_TOKEN="/var/run/secrets/kubernetes.io/serviceaccount/token"
 _SA_CA="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 _SA_NS_FILE="/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-if [[ -f "$_SA_TOKEN" && -f "$_SA_CA" ]]; then
-  mkdir -p "$HOME/.kube"
+if [[ -f "$_SA_TOKEN" && -f "$_SA_CA" && -f "$_SA_NS_FILE" ]]; then
+  HOME_DIR="${HOME:-/tmp}"
+  export HOME="$HOME_DIR"
+  mkdir -p "$HOME_DIR/.kube"
   _ns="$(cat "$_SA_NS_FILE")"
-  cat >"$HOME/.kube/config" <<KUBECONFIG
+  cat >"$HOME_DIR/.kube/config" <<KUBECONFIG
 apiVersion: v1
 kind: Config
 clusters:
@@ -407,8 +420,12 @@ COPY network-validation/ /opt/openshift-testing/network-validation/
 COPY cluster-validator/bin/entrypoint.sh /usr/local/bin/validator
 
 RUN chmod +x /usr/local/bin/validator \
-    && mkdir -p /artifacts /config
+    && mkdir -p /artifacts /config /tmp/validator-home \
+    && chgrp -R 0 /artifacts /config /tmp/validator-home \
+    && chmod -R g=u /artifacts /config /tmp/validator-home
 
+ENV HOME=/tmp/validator-home
+USER 1001
 ENTRYPOINT ["/usr/local/bin/validator"]
 EOF
 rm cluster-validator/manifests/.gitkeep
@@ -427,13 +444,20 @@ git commit -m "feat(cluster-validator): add Containerfile"
 
 ## Task 6: Write RBAC manifests
 
+> Final PR note: the initial broad ClusterRole design below was replaced by the
+> RBAC hardening follow-up. Current manifests keep the ClusterRole read-only for
+> cluster discovery, pre-create `dns-validation` and `network-validation`
+> namespaces, and grant mutable runtime access through namespaced Roles.
+
 **Files:**
 - Create: `cluster-validator/manifests/namespace.yaml`
 - Create: `cluster-validator/manifests/serviceaccount.yaml`
 - Create: `cluster-validator/manifests/clusterrole.yaml`
 - Create: `cluster-validator/manifests/clusterrolebinding.yaml`
 
-The resources below cover everything the two validator scripts actually invoke via `oc`. The ClusterRole is scoped to the minimum necessary — it does not grant cluster-admin.
+The final resources cover everything the two validator scripts actually invoke
+via `oc` without granting cluster-wide mutation. The read-only ClusterRole is
+paired with namespace-local Roles and narrow OpenShift diagnostic Roles.
 
 **Step 1: Write namespace.yaml**
 
@@ -442,7 +466,7 @@ cat > cluster-validator/manifests/namespace.yaml << 'EOF'
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: openshift-testing
+  name: cluster-validator
 EOF
 ```
 
@@ -454,7 +478,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: cluster-validator
-  namespace: openshift-testing
+  namespace: cluster-validator
 EOF
 ```
 
@@ -485,19 +509,19 @@ rules:
   # Core — pod lifecycle and diagnostics
   - apiGroups: [""]
     resources: [pods, pods/log, pods/exec]
-    verbs: [get, list, create, delete, watch]
+    verbs: [get, list, create, delete, watch, patch, update]
   # Core — services, configmaps, endpoints
   - apiGroups: [""]
     resources: [services, configmaps, endpoints]
-    verbs: [get, list, create, delete, watch]
+    verbs: [get, list, create, delete, watch, patch, update]
   # Core — events
   - apiGroups: [""]
     resources: [events]
     verbs: [get, list]
-  # apps — DaemonSets (node sweep, OVN inspection)
+  # apps — validator-managed workloads and diagnostics
   - apiGroups: [apps]
-    resources: [daemonsets]
-    verbs: [get, list, create, delete, watch]
+    resources: [daemonsets, deployments, replicasets]
+    verbs: [get, list, create, delete, watch, patch, update]
   # OpenShift cluster config
   - apiGroups: [config.openshift.io]
     resources: [clusterversions, clusteroperators, networks, ingresses]
@@ -532,7 +556,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cluster-validator
-    namespace: openshift-testing
+    namespace: cluster-validator
 EOF
 ```
 
@@ -561,7 +585,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: dns-validation
-  namespace: openshift-testing
+  namespace: cluster-validator
 spec:
   backoffLimit: 0
   template:
@@ -607,7 +631,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: network-validation
-  namespace: openshift-testing
+  namespace: cluster-validator
 spec:
   backoffLimit: 0
   template:
@@ -669,12 +693,12 @@ cat > cluster-validator/manifests/configmap-dns-example.yaml << 'EOF'
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-dns.yaml under /config.
 #
-# oc create -f configmap-dns.yaml -n openshift-testing
+# oc create -f configmap-dns.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dns-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for node sweep and dnsperf workloads.
@@ -711,12 +735,12 @@ cat > cluster-validator/manifests/configmap-network-example.yaml << 'EOF'
 # Copy this file, remove the -example suffix, and uncomment variables you want to override.
 # Mount the ConfigMap in job-network.yaml under /config.
 #
-# oc create -f configmap-network.yaml -n openshift-testing
+# oc create -f configmap-network.yaml -n cluster-validator
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: network-validation-config
-  namespace: openshift-testing
+  namespace: cluster-validator
 data:
   validation.env: |
     # Temporary namespace used for iperf3 pods.
@@ -905,11 +929,11 @@ oc apply -f cluster-validator/manifests/clusterrolebinding.yaml
 oc create -f cluster-validator/manifests/job-dns.yaml
 
 # 3. Follow logs
-oc logs -f job/dns-validation -n openshift-testing
+oc logs -f job/dns-validation -n cluster-validator
 
 # 4. Run network validation
 oc create -f cluster-validator/manifests/job-network.yaml
-oc logs -f job/network-validation -n openshift-testing
+oc logs -f job/network-validation -n cluster-validator
 ```
 
 ## Configuration
@@ -924,7 +948,7 @@ Example variables are documented as comments in `job-dns.yaml` and `job-network.
 Copy `manifests/configmap-dns-example.yaml` to `configmap-dns.yaml`, remove the `-example` suffix, uncomment and edit variables, then:
 
 ```bash
-oc apply -f cluster-validator/manifests/configmap-dns.yaml -n openshift-testing
+oc apply -f cluster-validator/manifests/configmap-dns.yaml -n cluster-validator
 ```
 
 Uncomment the `volumes` and `volumeMounts` sections in `job-dns.yaml`, then create the Job.

@@ -95,12 +95,15 @@ if [[ "$args" == *"custom-columns=NAME"* ]]; then
 fi
 
 # Namespace and pod operations
+if [[ "$args" == *"create namespace"* ]] || [[ "$args" == *"delete namespace"* ]]; then
+  echo "runtime must not create or delete namespaces: $args" >&2
+  exit 99
+fi
+
 if [[ "$args" == *"get ns network-validation"* ]] || \
-   [[ "$args" == *"create namespace"* ]] || \
    [[ "$args" == *"apply -f"* ]] || \
    [[ "$args" == *"wait pod"* ]] || \
-   [[ "$args" == *"delete pod"* ]] || \
-   [[ "$args" == *"delete namespace"* ]]; then
+   [[ "$args" == *"delete pod"* ]]; then
   echo "ok"
   exit 0
 fi
@@ -165,7 +168,8 @@ if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 -s -p 5201 
   exit 0
 fi
 
-if [[ "$args" == *"iperf3-server -- bash -c"*"ss -tlnH"* ]]; then
+if [[ "$args" == "-n network-validation exec iperf3-server -- bash -c "*"ss -H -ltn"* ]]; then
+  echo "ready"
   exit 0
 fi
 
@@ -356,6 +360,31 @@ if [[ "$rc" -eq 0 ]]; then
 fi
 grep -Fq "ERROR: --role requires a value" "$TMP_DIR/collector-missing-value.out"
 
+# --- Test 1d: TCP server collector does not exit before starting iperf3 ---
+cat >"$FAKE_BIN/iperf3" <<'FAKEIPERF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--version" ]]; then
+  echo "iperf 3.19"
+  exit 0
+fi
+printf '%s\n' "$*" >"${FAKE_IPERF_LOG:-/dev/null}"
+printf '{"end":{}}\n'
+FAKEIPERF
+chmod +x "$FAKE_BIN/iperf3"
+
+TCP_COLLECTOR_DIR="$TMP_DIR/tcp-collector"
+FAKE_IPERF_LOG="$TMP_DIR/fake-iperf.log" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/lib/iperf3-collector.sh" \
+    --role server \
+    --protocol tcp \
+    --interface eth0 \
+    --output "$TCP_COLLECTOR_DIR" \
+    --port 5201
+
+test -f "$TCP_COLLECTOR_DIR/iperf3_server.rc"
+grep -Fxq "0" "$TCP_COLLECTOR_DIR/iperf3_server.rc"
+grep -Fq -- "-s -p 5201 -1 --json" "$TMP_DIR/fake-iperf.log"
+
 # --- Test 2: --config without a path fails ---
 set +e
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
@@ -421,6 +450,11 @@ grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/07-report/network-validation-repo
 grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/07-report/network-validation-report.md"
 grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
 grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Socket buffer: system default" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+if grep -Fq -- "--window 256M" "$FAKE_OC_LOG"; then
+  echo "default network validation should not force a large socket buffer" >&2
+  exit 1
+fi
 
 # --- Test 6: Direct same-node action pins both pods to one node ---
 SAME_ARTIFACT_DIR="$TMP_DIR/same-node-artifacts"
@@ -451,6 +485,11 @@ test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
 grep -Fxq "0" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt.rc"
 grep -Fq "ready-check" "$FAKE_OC_LOG"
+grep -Fq "ss -H -ltn" "$FAKE_OC_LOG"
+if grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"; then
+  echo "readiness check must not consume the single-shot iperf3 server connection" >&2
+  exit 1
+fi
 
 # --- Test 7: Pod-to-service uses a real artifact dir and valid Service ports ---
 SVC_ARTIFACT_DIR="$TMP_DIR/service-artifacts"
@@ -518,6 +557,10 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 grep -Fq "hostNetwork: true" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "hostPID: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "privileged: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"
+if grep -Fq "runAsUser: 0" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"; then
+  echo "restricted best-effort pod must not request root runAsUser" >&2
+  exit 1
+fi
 
 # --- Test 10: IPERF_PARALLEL accepts "auto" and positive integers, rejects 0 ---
 PARALLEL_BAD_CONFIG="$TMP_DIR/bad-parallel.env"

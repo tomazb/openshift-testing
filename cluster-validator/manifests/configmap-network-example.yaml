@@ -1,0 +1,56 @@
+# Copy this file, remove the -example suffix, and uncomment variables you want to override.
+# Mount the ConfigMap in job-network.yaml under /config.
+#
+# oc create -f configmap-network.yaml -n cluster-validator
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-validation-config
+  namespace: cluster-validator
+data:
+  validation.env: |
+    # Temporary namespace used for iperf3 pods.
+    # IPERF_NAMESPACE="network-validation"
+
+    # Pin specific nodes (leave empty for auto-selection).
+    # IPERF_SERVER_NODE=""
+    # IPERF_CLIENT_NODE=""
+
+    # iperf3 test duration in seconds.
+    # IPERF_DURATION="30"
+
+    # Protocol: tcp or udp.
+    # IPERF_PROTOCOL="tcp"
+
+    # UDP payload size, or auto-detect from selected interface MTU.
+    # IPERF_PACKET_SIZE="auto"
+
+    # Leave empty to use iperf3/kernel defaults. Set a value such as "4M" only when the cluster permits it.
+    # IPERF_SOCKET_BUFFER=""
+
+    # Parallel streams: positive integer, or auto based on iperf3 version.
+    # IPERF_PARALLEL="auto"
+
+    # Host-network test mode. Leave IPERF_PRIVILEGED_MODE empty to match host-network mode,
+    # or set it to "false" for best-effort restricted host-network metrics.
+    # IPERF_HOST_NETWORK="false"
+    # IPERF_PRIVILEGED_MODE=""
+
+    # Minimum acceptable throughput in Gbps (0 = skip threshold check).
+    # IPERF_MIN_THROUGHPUT_GBPS="0"
+
+    # Maximum acceptable packet loss percentage for UDP tests.
+    # IPERF_MAX_LOSS_PERCENT="1"
+
+    # Maximum acceptable retransmits for TCP tests (0 = skip threshold check).
+    # IPERF_MAX_RETRANSMITS="0"
+
+    # Dedicated node-metrics action settings.
+    # NODE_METRICS_DURATION="120"
+    # NODE_METRICS_PROTOCOL="tcp"
+
+    # Enable extended deep metrics collection.
+    # IPERF_DEEP_METRICS="false"
+
+    # Pod image (default: network-testing-image from GHCR).
+    # IPERF_IMAGE="ghcr.io/tomazb/openshift-testing/network-testing-image:latest"

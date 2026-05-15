@@ -50,6 +50,15 @@ The `network-validation/` directory contains an iperf3-based network throughput 
 
 See `network-validation/README.md` for usage instructions.
 
+### Cluster validator
+
+The `cluster-validator/` directory packages the DNS and network validators into
+one container image and a set of Kubernetes Job manifests. It lets an operator
+apply the required namespaces/RBAC once, then run either validator in-cluster
+without a local validation workstation.
+
+See `cluster-validator/README.md` for install and Job usage instructions.
+
 ## Planning docs
 
 Current design and implementation plans live under `docs/plans/`, including the approved `cluster-validator` plan for packaging DNS and network validation as in-cluster Kubernetes Jobs.

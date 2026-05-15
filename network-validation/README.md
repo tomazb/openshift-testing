@@ -41,7 +41,7 @@ bash bin/ocp-network-validate --config config/validation.env all
 | `node-metrics` | Run a dedicated deep metrics collection test |
 | `ovn-diagnostics` | Capture OVN-Kubernetes logs, DB state, tunnel stats |
 | `report` | Generate markdown report with verdict |
-| `cleanup` | Delete validation namespace |
+| `cleanup` | Delete validator-managed pods, Service, and collector ConfigMap in the validation namespace |
 | `all` | Run the full recommended topology and diagnostics sequence |
 
 ## Configuration

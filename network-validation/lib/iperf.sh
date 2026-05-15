@@ -83,7 +83,7 @@ wait_for_iperf_server() {
   # A TCP probe from the client would be consumed by iperf3 -1 as its one
   # permitted session, causing the real client to get "Connection refused".
   # shellcheck disable=SC2016 # evaluated by bash inside the server pod.
-  local ready_script='for i in $(seq 1 "$1"); do if ss -tlnH 2>/dev/null | grep -qF ":$2"; then exit 0; fi; sleep 1; done; exit 1'
+  local ready_script='for i in $(seq 1 "$1"); do if ss -H -ltn 2>/dev/null | awk "{print \$4}" | grep -Eq "(^|:)${2}$"; then exit 0; fi; sleep 1; done; exit 1'
   log "Waiting for iperf3 server readiness on $target_ip:$IPERF_PORT..."
   run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
     bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$IPERF_PORT"

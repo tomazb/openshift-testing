@@ -31,6 +31,11 @@ unset _args _i
 
 args="$*"
 
+if [[ "$args" == "create namespace "* ]] || [[ "$args" == "delete namespace "* ]]; then
+  echo "runtime must not create or delete namespaces: $args" >&2
+  exit 99
+fi
+
 case "$args" in
   version|whoami|\
   "get clusterversion version -o yaml"|\
@@ -77,9 +82,9 @@ NODES
     echo "ok"
     exit 0
     ;;
-  "delete namespace dns-validation --ignore-not-found=true")
+  "-n dns-validation delete daemonset/dns-sweep pod/dnsperf configmap/dnsperf-queries --ignore-not-found=true")
     printf '%s\n' "$args" >>"$FAKE_STATE_DIR/oc-delete.log"
-    echo "namespace deleted"
+    echo "validator resources deleted"
     exit 0
     ;;
   "-n dns-validation get pod -l app=dns-sweep -o jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}")
@@ -246,4 +251,4 @@ test -s "$ARTIFACT_DIR/03-dnsperf/queries.ocp.txt"
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/dns-validation/bin/ocp-dns-validate" --config "$CONFIG_FILE" --yes cleanup
 
-grep -Fxq "delete namespace dns-validation --ignore-not-found=true" "$FAKE_STATE_DIR/oc-delete.log"
+grep -Fxq -- "-n dns-validation delete daemonset/dns-sweep pod/dnsperf configmap/dnsperf-queries --ignore-not-found=true" "$FAKE_STATE_DIR/oc-delete.log"

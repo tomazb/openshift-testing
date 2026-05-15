@@ -230,8 +230,9 @@ cleanup() {
   init_dirs
   read_runtime
   require_cmd oc
-  if confirm "Delete namespace '$VALIDATION_NAMESPACE'?"; then
-    run oc delete namespace "$VALIDATION_NAMESPACE" --ignore-not-found=true
+  if confirm "Delete validator resources in namespace '$VALIDATION_NAMESPACE'?"; then
+    ensure_namespace
+    run oc -n "$VALIDATION_NAMESPACE" delete daemonset/dns-sweep pod/dnsperf configmap/dnsperf-queries --ignore-not-found=true
   else
     log "Cleanup skipped."
   fi

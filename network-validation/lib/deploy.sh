@@ -124,7 +124,13 @@ spec:
       readOnly: true
     securityContext:
       privileged: ${privileged}
+EOF
+  if [[ "$privileged" == "true" ]]; then
+    cat <<EOF
       runAsUser: 0
+EOF
+  fi
+  cat <<EOF
   volumes:
   - name: network-validation-collector
     configMap:
@@ -241,8 +247,9 @@ cleanup_action() {
   init_dirs
   read_runtime
   require_cmd oc
-  if confirm "Delete namespace '$IPERF_NAMESPACE'?"; then
-    run oc delete namespace "$IPERF_NAMESPACE" --ignore-not-found=true
+  if confirm "Delete validator resources in namespace '$IPERF_NAMESPACE'?"; then
+    ensure_namespace
+    run oc -n "$IPERF_NAMESPACE" delete pod/iperf3-server pod/iperf3-client service/iperf3-server configmap/network-validation-collector --ignore-not-found=true
   else
     log "Cleanup skipped."
   fi

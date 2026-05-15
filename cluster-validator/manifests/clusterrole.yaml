@@ -1,0 +1,20 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-validator
+rules:
+  # Core — cluster topology and identity
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list]
+  # OpenShift cluster config
+  - apiGroups: [config.openshift.io]
+    resources: [clusterversions, clusteroperators, networks, ingresses]
+    verbs: [get, list]
+  # OpenShift operator config (DNS and network operators)
+  - apiGroups: [operator.openshift.io]
+    resources: [dnses, networks]
+    verbs: [get, list]

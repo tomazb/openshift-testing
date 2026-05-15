@@ -206,7 +206,7 @@ oc debug node/<client-node> -- bash -c \
 | `-p, --protocol` | `udp` | `tcp` or `udp` |
 | `-b, --bandwidth` | `0` | iperf3 bandwidth target (e.g. `10G`; `0` = unlimited) |
 | `-l, --packet-size` | `8972` | UDP payload bytes (8972 = jumbo frames for 9000 MTU) |
-| `-w, --window` | `256M` | iperf3 socket buffer |
+| `-w, --window` | system default | iperf3 socket buffer; set explicitly only when the cluster permits it |
 | `-P, --parallel` | `1` | Parallel streams |
 | `-i, --interface` | *(auto)* | Network interface to monitor |
 | `-o, --output` | `./iperf3-metrics-<role>-<ts>` | Output directory |
