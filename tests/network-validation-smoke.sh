@@ -427,6 +427,11 @@ grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-repo
 grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
 grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "Socket buffer: system default" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+if grep -Fq -- "--window 256M" "$FAKE_OC_LOG"; then
+  echo "default network validation should not force a large socket buffer" >&2
+  exit 1
+fi
 
 # --- Test 6: Direct same-node action pins both pods to one node ---
 SAME_ARTIFACT_DIR="$TMP_DIR/same-node-artifacts"

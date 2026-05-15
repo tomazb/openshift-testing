@@ -19,6 +19,7 @@ run_iperf_test() {
   local client_remote_dir="/tmp/network-validation-client"
   local collector_extra_args=()
   [[ "${IPERF_DEEP_METRICS:-false}" == "true" ]] && collector_extra_args+=(--deep)
+  [[ -z "${IPERF_SOCKET_BUFFER:-}" ]] || collector_extra_args+=(--window "$IPERF_SOCKET_BUFFER")
 
   log "Starting iperf3 server collector in pod iperf3-server..."
   timeout "$command_timeout" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
@@ -28,7 +29,6 @@ run_iperf_test() {
       --port "$IPERF_PORT" \
       --duration "$IPERF_DURATION" \
       --parallel "$IPERF_PARALLEL" \
-      --window "$IPERF_SOCKET_BUFFER" \
       --interface "$IPERF_INTERFACE" \
       --output "$server_remote_dir" \
       "${collector_extra_args[@]}" \
@@ -54,7 +54,6 @@ run_iperf_test() {
       --port "$IPERF_PORT" \
       --duration "$IPERF_DURATION" \
       --parallel "$IPERF_PARALLEL" \
-      --window "$IPERF_SOCKET_BUFFER" \
       --bandwidth "$IPERF_BANDWIDTH" \
       --packet-size "$IPERF_PACKET_SIZE" \
       --interface "$IPERF_INTERFACE" \

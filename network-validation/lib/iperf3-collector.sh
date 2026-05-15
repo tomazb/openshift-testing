@@ -8,7 +8,7 @@ DURATION="30"
 BANDWIDTH="0"
 PROTOCOL="tcp"
 PACKET_SIZE="auto"
-SOCKET_BUFFER="256M"
+SOCKET_BUFFER=""
 PARALLEL="1"
 OUTPUT_DIR=""
 INTERFACE="auto"
@@ -253,7 +253,8 @@ run_client() {
   collect_continuous_metrics &
   METRIC_PID=$!
   start_mpstat_loop
-  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION" -w "$SOCKET_BUFFER" -P "$PARALLEL" --json)
+  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION" -P "$PARALLEL" --json)
+  [[ -z "$SOCKET_BUFFER" ]] || iperf_args+=(-w "$SOCKET_BUFFER")
   if [[ "$PROTOCOL" == "udp" ]]; then
     iperf_args+=(-u -b "$BANDWIDTH" -l "$PACKET_SIZE")
   fi

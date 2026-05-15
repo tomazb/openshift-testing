@@ -233,7 +233,7 @@ $(cat "$ARTIFACT_DIR/00-preflight/network-operator-gate.txt" 2>/dev/null || echo
 - Duration: ${IPERF_DURATION}s
 - Bandwidth target: ${IPERF_BANDWIDTH}
 - Packet size: ${IPERF_PACKET_SIZE}
-- Socket buffer: ${IPERF_SOCKET_BUFFER}
+- Socket buffer: ${IPERF_SOCKET_BUFFER:-system default}
 - Parallel streams: ${IPERF_PARALLEL}
 
 ## Cross-node pod network
