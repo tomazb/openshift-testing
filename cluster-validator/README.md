@@ -56,13 +56,16 @@ through the narrow `role-openshift-config-pull-secret.yaml` binding.
 
 ### Using a ConfigMap (full config)
 
-Copy `manifests/configmap-dns-example.yaml` to `configmap-dns.yaml`, remove the `-example` suffix, uncomment and edit variables, then:
+Copy the DNS or network ConfigMap example, remove the `-example` suffix,
+uncomment and edit variables, then apply it:
 
 ```bash
 oc apply -f cluster-validator/manifests/configmap-dns.yaml -n cluster-validator
+oc apply -f cluster-validator/manifests/configmap-network.yaml -n cluster-validator
 ```
 
-Uncomment the `volumes` and `volumeMounts` sections in `job-dns.yaml`, then create the Job.
+Uncomment the matching `volumes` and `volumeMounts` sections in `job-dns.yaml`
+or `job-network.yaml`, then create the Job.
 
 ## Persisting artifacts
 

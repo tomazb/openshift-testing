@@ -28,7 +28,7 @@ Actions:
   node-metrics         Run dedicated node-level metrics collection (deep, 120 s by default)
   ovn-diagnostics      Capture OVN-Kubernetes diagnostics
   report               Generate markdown report
-  cleanup              Delete validation namespace
+  cleanup              Delete validator resources in the validation namespace
   all                  Run recommended sequence
   show-paths           Show artifact paths
 

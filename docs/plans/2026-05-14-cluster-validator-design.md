@@ -24,9 +24,13 @@ cluster-validator/
 │   └── entrypoint.sh
 ├── manifests/
 │   ├── namespace.yaml
+│   ├── namespace-dns-validation.yaml
+│   ├── namespace-network-validation.yaml
 │   ├── serviceaccount.yaml
 │   ├── clusterrole.yaml
 │   ├── clusterrolebinding.yaml
+│   ├── role-*.yaml
+│   ├── rolebinding-*.yaml
 │   ├── configmap-dns-example.yaml
 │   ├── configmap-network-example.yaml
 │   ├── job-dns.yaml
@@ -51,7 +55,12 @@ FROM ghcr.io/tomazb/openshift-testing/network-testing-image:latest
 COPY dns-validation/     /opt/openshift-testing/dns-validation/
 COPY network-validation/ /opt/openshift-testing/network-validation/
 COPY cluster-validator/bin/entrypoint.sh /usr/local/bin/validator
-RUN chmod +x /usr/local/bin/validator
+RUN chmod +x /usr/local/bin/validator \
+    && mkdir -p /artifacts /config /tmp/validator-home \
+    && chgrp -R 0 /artifacts /config /tmp/validator-home \
+    && chmod -R g=u /artifacts /config /tmp/validator-home
+ENV HOME=/tmp/validator-home
+USER 1001
 ENTRYPOINT ["/usr/local/bin/validator"]
 ```
 
@@ -74,7 +83,7 @@ ghcr.io/tomazb/openshift-testing/cluster-validator:sha-<short-sha>
 | Variable | Default | Description |
 |---|---|---|
 | `VALIDATOR` | `dns` | Which tool to run: `dns`, `network`, or `all` |
-| `ARTIFACT_DIR` | `/artifacts` if mount exists, else `/tmp/artifacts` | Where artifact files land |
+| `ARTIFACT_DIR` | `/artifacts` | Where artifact files land |
 
 ### Config file
 
@@ -89,27 +98,33 @@ If `/config/validation.env` is present (a ConfigMap mounted at `/config`), it is
 
 ## Kubernetes Manifests
 
-### Namespace
+### Namespaces
 
-`cluster-validator` — a dedicated namespace keeps the ServiceAccount and RBAC scoped without using the reserved `openshift-*` prefix.
+- `cluster-validator` — holds the ServiceAccount, ConfigMaps, and Jobs.
+- `dns-validation` — runtime namespace for DNS sweep and dnsperf workloads.
+- `network-validation` — runtime namespace for iperf3 validation workloads.
 
 ### ServiceAccount
 
 `cluster-validator` in the `cluster-validator` namespace.
 
-### ClusterRole (minimal)
+### ClusterRole and Roles
 
-The ClusterRole grants only what the validator scripts actually invoke:
+The ClusterRole grants read-only cluster discovery. Mutable runtime permissions
+are scoped to the `dns-validation` and `network-validation` namespaces through
+Role/RoleBinding manifests. Additional narrow read-only Roles cover OpenShift
+component namespaces used for diagnostics, and `openshift-config/pull-secret`
+access is limited to `get` on that single Secret.
 
 | Resource | Verbs |
 |---|---|
 | `nodes` | get, list |
-| `namespaces` | get, list, create, delete |
-| `pods`, `pods/log`, `pods/exec` | get, list, create, delete, watch, patch, update |
-| `daemonsets`, `deployments`, `replicasets`, `services`, `configmaps`, `endpoints` | get, list, create, delete, watch, patch, update |
-| `clusterversions`, `clusteroperators` | get, list |
-| `dnses.operator.openshift.io` | get, list |
-| `events` | get, list |
+| `namespaces` | get, list |
+| `clusterversions`, `clusteroperators`, `networks`, `ingresses` | get, list |
+| `dnses.operator.openshift.io`, `networks.operator.openshift.io` | get, list |
+| runtime namespace pods, services, configmaps, endpoints, apps workloads | get, list, create, delete, watch, patch, update |
+| OpenShift diagnostic namespace pods/logs/events/routes | get, list as needed |
+| `openshift-config` `secret/pull-secret` | get |
 
 ### ClusterRoleBinding
 
@@ -155,8 +170,8 @@ Stubs `oc` and the two validator scripts. Verifies:
 2. `VALIDATOR=network` calls `ocp-network-validate --yes all`
 3. `VALIDATOR=all` calls both scripts
 4. A ConfigMap mount at `/config/validation.env` is passed via `--config`
-5. `/artifacts` PVC mount is used as `ARTIFACT_DIR` when present
-6. `/tmp/artifacts` is used when no PVC is mounted
+5. `/artifacts` is created and used as the default artifact directory
+6. in-cluster kubeconfig generation is safe when HOME or service account files are absent
 
 ## Out of Scope
 
