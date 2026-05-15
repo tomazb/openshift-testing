@@ -3,10 +3,40 @@
 
 require_pull_secret() {
   [[ -f "$PULL_SECRET_FILE" ]] && return 0
+
+  if resolve_openshift_config_pull_secret; then
+    log "Using openshift-config/pull-secret as fallback for openshift-tests extraction."
+    return 0
+  fi
+
   warn "PULL_SECRET_FILE not found or not readable: $PULL_SECRET_FILE — skipping (conformance tests require a pull secret)"
   mkdir -p "$ARTIFACT_DIR/01-openshift-tests"
   touch "$ARTIFACT_DIR/01-openshift-tests/pull-secret-skipped"
   return 1
+}
+
+resolve_openshift_config_pull_secret() {
+  command -v base64 >/dev/null 2>&1 || return 1
+
+  local encoded fallback tmp
+  fallback="$ARTIFACT_DIR/tmp/openshift-config-pull-secret.json"
+  tmp="${fallback}.tmp"
+  mkdir -p "$(dirname "$fallback")"
+
+  encoded="$(oc get secret pull-secret -n openshift-config -o 'jsonpath={.data.\.dockerconfigjson}' 2>/dev/null || true)"
+  [[ -n "$encoded" ]] || return 1
+
+  if ! printf '%s' "$encoded" | base64 -d >"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  [[ -s "$tmp" ]] || { rm -f "$tmp"; return 1; }
+
+  chmod 0600 "$tmp" 2>/dev/null || true
+  mv "$tmp" "$fallback"
+  PULL_SECRET_FILE="$fallback"
+  export PULL_SECRET_FILE
+  return 0
 }
 
 write_run_info_kv() {
