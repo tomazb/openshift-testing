@@ -95,12 +95,15 @@ if [[ "$args" == *"custom-columns=NAME"* ]]; then
 fi
 
 # Namespace and pod operations
+if [[ "$args" == *"create namespace"* ]] || [[ "$args" == *"delete namespace"* ]]; then
+  echo "runtime must not create or delete namespaces: $args" >&2
+  exit 99
+fi
+
 if [[ "$args" == *"get ns network-validation"* ]] || \
-   [[ "$args" == *"create namespace"* ]] || \
    [[ "$args" == *"apply -f"* ]] || \
    [[ "$args" == *"wait pod"* ]] || \
-   [[ "$args" == *"delete pod"* ]] || \
-   [[ "$args" == *"delete namespace"* ]]; then
+   [[ "$args" == *"delete pod"* ]]; then
   echo "ok"
   exit 0
 fi

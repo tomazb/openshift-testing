@@ -95,7 +95,9 @@ runtime_key_prefix() {
 }
 
 ensure_namespace() {
-  oc get ns "$IPERF_NAMESPACE" >/dev/null 2>&1 || run oc create namespace "$IPERF_NAMESPACE"
+  if ! oc get ns "$IPERF_NAMESPACE" >/dev/null 2>&1; then
+    fail "Validation namespace '$IPERF_NAMESPACE' is missing. Apply the cluster-validator install manifests before running this action."
+  fi
 }
 
 show_paths() {

@@ -92,7 +92,9 @@ write_runtime_kv() {
 }
 
 ensure_namespace() {
-  oc get ns "$VALIDATION_NAMESPACE" >/dev/null 2>&1 || run oc create namespace "$VALIDATION_NAMESPACE"
+  if ! oc get ns "$VALIDATION_NAMESPACE" >/dev/null 2>&1; then
+    fail "Validation namespace '$VALIDATION_NAMESPACE' is missing. Apply the cluster-validator install manifests before running this action."
+  fi
 }
 
 ensure_tests() {
