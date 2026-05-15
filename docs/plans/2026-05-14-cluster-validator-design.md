@@ -105,8 +105,8 @@ The ClusterRole grants only what the validator scripts actually invoke:
 |---|---|
 | `nodes` | get, list |
 | `namespaces` | get, list, create, delete |
-| `pods`, `pods/log`, `pods/exec` | get, list, create, delete, watch |
-| `daemonsets`, `services` | get, list, create, delete, watch |
+| `pods`, `pods/log`, `pods/exec` | get, list, create, delete, watch, patch, update |
+| `daemonsets`, `deployments`, `replicasets`, `services`, `configmaps`, `endpoints` | get, list, create, delete, watch, patch, update |
 | `clusterversions`, `clusteroperators` | get, list |
 | `dnses.operator.openshift.io` | get, list |
 | `events` | get, list |

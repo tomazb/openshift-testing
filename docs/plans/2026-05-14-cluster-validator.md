@@ -485,19 +485,19 @@ rules:
   # Core — pod lifecycle and diagnostics
   - apiGroups: [""]
     resources: [pods, pods/log, pods/exec]
-    verbs: [get, list, create, delete, watch]
+    verbs: [get, list, create, delete, watch, patch, update]
   # Core — services, configmaps, endpoints
   - apiGroups: [""]
     resources: [services, configmaps, endpoints]
-    verbs: [get, list, create, delete, watch]
+    verbs: [get, list, create, delete, watch, patch, update]
   # Core — events
   - apiGroups: [""]
     resources: [events]
     verbs: [get, list]
-  # apps — DaemonSets (node sweep, OVN inspection)
+  # apps — validator-managed workloads and diagnostics
   - apiGroups: [apps]
-    resources: [daemonsets]
-    verbs: [get, list, create, delete, watch]
+    resources: [daemonsets, deployments, replicasets]
+    verbs: [get, list, create, delete, watch, patch, update]
   # OpenShift cluster config
   - apiGroups: [config.openshift.io]
     resources: [clusterversions, clusteroperators, networks, ingresses]
