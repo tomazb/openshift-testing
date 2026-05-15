@@ -103,7 +103,7 @@ ovn_diagnostics() {
     return 0
   fi
 
-  local d="$ARTIFACT_DIR/05-ovn-diagnostics"
+  local d="$ARTIFACT_DIR/06-ovn-diagnostics"
   local rc=0
   mkdir -p "$d"
 
@@ -113,20 +113,48 @@ ovn_diagnostics() {
   run_out "$d/ovn-daemonsets.txt" oc -n openshift-ovn-kubernetes get daemonsets -o wide
   run_out "$d/ovn-events.txt" oc -n openshift-ovn-kubernetes get events --sort-by=.metadata.creationTimestamp
 
-  local control_plane_pod_file="$d/ovnkube-control-plane-pods.txt"
-  if run_out_checked "$control_plane_pod_file" oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-control-plane -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'; then
-    local control_plane_pod
-    control_plane_pod="$(awk 'NF {print; exit}' "$control_plane_pod_file")"
-    if [[ -n "$control_plane_pod" ]]; then
-      run_out "$d/${control_plane_pod}-logs.txt" oc -n openshift-ovn-kubernetes logs "$control_plane_pod" --all-containers --tail=500 || rc=1
-      run_out "$d/${control_plane_pod}-nbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$control_plane_pod" -c nbdb -- ovn-nbctl show || rc=1
-      run_out "$d/${control_plane_pod}-sbctl-show.txt" oc -n openshift-ovn-kubernetes exec "$control_plane_pod" -c sbdb -- ovn-sbctl show || rc=1
-    else
-      warn "No ovnkube-control-plane pod found for OVN database diagnostics."
-      rc=1
-    fi
+  # Capture control-plane manager logs (ovnkube-cluster-manager, etc.)
+  run_out "$d/ovnkube-control-plane-logs.txt" \
+    oc -n openshift-ovn-kubernetes logs -l app=ovnkube-control-plane --all-containers --tail=200
+
+  # Detect which pod has nbdb/sbdb: OCP 4.14+ moved nbdb/sbdb from
+  # ovnkube-control-plane into ovnkube-node; search ovnkube-node first.
+  local db_pod="" selector
+  for selector in "app=ovnkube-node" "app=ovnkube-control-plane"; do
+    while IFS=$'\t' read -r candidate_pod candidate_containers; do
+      [[ -n "$candidate_pod" ]] || continue
+      if echo "$candidate_containers" | tr ' ' '\n' | grep -Fxq "nbdb"; then
+        db_pod="$candidate_pod"
+        break 2
+      fi
+    done < <(oc -n openshift-ovn-kubernetes get pods -l "$selector" \
+      -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.name}{" "}{end}{"\n"}{end}' \
+      2>/dev/null || true)
+  done
+  if [[ -n "$db_pod" ]]; then
+    run_out_checked "$d/${db_pod}-nbctl-show.txt" \
+      oc -n openshift-ovn-kubernetes exec "$db_pod" -c nbdb -- ovn-nbctl show || rc=1
+    run_out_checked "$d/${db_pod}-sbctl-show.txt" \
+      oc -n openshift-ovn-kubernetes exec "$db_pod" -c sbdb -- ovn-sbctl show || rc=1
   else
+    warn "No pod with nbdb container found; skipping OVN database diagnostics."
     rc=1
+  fi
+
+  # Detect the node-level exec container (renamed in OCP 4.14+:
+  # ovnkube-node → ovn-controller).
+  local node_exec_container="" candidate first_pod_containers
+  first_pod_containers="$(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node \
+    -o 'jsonpath={range .items[0].spec.containers[*]}{.name}{"\n"}{end}' 2>/dev/null || true)"
+  for candidate in ovnkube-node ovn-controller ovnkube-controller; do
+    if echo "$first_pod_containers" | grep -Fxq "$candidate"; then
+      node_exec_container="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$node_exec_container" ]]; then
+    warn "No suitable exec container found in ovnkube-node pods; defaulting to ovnkube-node."
+    node_exec_container="ovnkube-node"
   fi
 
   local participant_nodes=()
@@ -167,10 +195,14 @@ ovn_diagnostics() {
   while read -r node_label pod; do
     [[ -n "$node_label" && -n "${pod:-}" ]] || continue
 
-    run_out "$d/${node_label}-${pod}-logs.txt" oc -n openshift-ovn-kubernetes logs "$pod" --all-containers --tail=500 || rc=1
-    run_out "$d/${node_label}-${pod}-geneve-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show genev_sys_6081 || rc=1
-    run_out "$d/${node_label}-${pod}-ovn-mp0-stats.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ip -s link show ovn-k8s-mp0 || rc=1
-    run_out "$d/${node_label}-${pod}-flow-count.txt" oc -n openshift-ovn-kubernetes exec "$pod" -c ovnkube-node -- ovs-ofctl dump-aggregate br-int || rc=1
+    run_out "$d/${node_label}-${pod}-logs.txt" \
+      oc -n openshift-ovn-kubernetes logs "$pod" --all-containers --tail=500
+    run_out_checked "$d/${node_label}-${pod}-geneve-stats.txt" \
+      oc -n openshift-ovn-kubernetes exec "$pod" -c "$node_exec_container" -- ip -s link show genev_sys_6081 || rc=1
+    run_out_checked "$d/${node_label}-${pod}-ovn-mp0-stats.txt" \
+      oc -n openshift-ovn-kubernetes exec "$pod" -c "$node_exec_container" -- ip -s link show ovn-k8s-mp0 || rc=1
+    run_out_checked "$d/${node_label}-${pod}-flow-count.txt" \
+      oc -n openshift-ovn-kubernetes exec "$pod" -c "$node_exec_container" -- ovs-ofctl dump-aggregate br-int || rc=1
   done <"$node_pod_file"
 
   echo "$rc" >"$d/ovn-diagnostics.rc"

@@ -84,7 +84,7 @@ IPERF_BANDWIDTH="${IPERF_BANDWIDTH:-0}"
 IPERF_PROTOCOL="${IPERF_PROTOCOL:-tcp}"
 IPERF_PACKET_SIZE="${IPERF_PACKET_SIZE:-auto}"
 IPERF_SOCKET_BUFFER="${IPERF_SOCKET_BUFFER:-}"
-IPERF_PARALLEL="${IPERF_PARALLEL:-1}"
+IPERF_PARALLEL="${IPERF_PARALLEL:-auto}"
 IPERF_PORT="${IPERF_PORT:-5201}"
 IPERF_INTERFACE="${IPERF_INTERFACE:-auto}"
 IPERF_SERVER_READY_TIMEOUT="${IPERF_SERVER_READY_TIMEOUT:-30}"
@@ -121,10 +121,15 @@ validate_packet_size() {
   [[ "$value" == "auto" || "$value" =~ ^[1-9][0-9]*$ ]] || config_error "IPERF_PACKET_SIZE must be auto or a positive integer"
 }
 
+validate_parallel() {
+  local value="$1"
+  [[ "$value" == "auto" || "$value" =~ ^[1-9][0-9]*$ ]] || config_error "IPERF_PARALLEL must be auto or a positive integer"
+}
+
 validate_config() {
   validate_positive_integer IPERF_DURATION "$IPERF_DURATION"
   validate_packet_size "$IPERF_PACKET_SIZE"
-  validate_positive_integer IPERF_PARALLEL "$IPERF_PARALLEL"
+  validate_parallel "$IPERF_PARALLEL"
   validate_positive_integer IPERF_PORT "$IPERF_PORT"
   validate_positive_integer IPERF_SERVER_READY_TIMEOUT "$IPERF_SERVER_READY_TIMEOUT"
   validate_non_negative_number IPERF_MIN_THROUGHPUT_GBPS "$IPERF_MIN_THROUGHPUT_GBPS"

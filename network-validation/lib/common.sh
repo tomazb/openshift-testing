@@ -69,8 +69,9 @@ init_dirs() {
     "$ARTIFACT_DIR/02-same-node" \
     "$ARTIFACT_DIR/03-host-network" \
     "$ARTIFACT_DIR/04-pod-to-service" \
-    "$ARTIFACT_DIR/05-ovn-diagnostics" \
-    "$ARTIFACT_DIR/06-report" \
+    "$ARTIFACT_DIR/05-node-metrics" \
+    "$ARTIFACT_DIR/06-ovn-diagnostics" \
+    "$ARTIFACT_DIR/07-report" \
     "$ARTIFACT_DIR/tmp"
 }
 

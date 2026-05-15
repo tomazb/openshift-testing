@@ -253,8 +253,9 @@ run_client() {
   collect_continuous_metrics &
   METRIC_PID=$!
   start_mpstat_loop
-  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION" -P "$PARALLEL" --json)
-  [[ -z "$SOCKET_BUFFER" ]] || iperf_args+=(-w "$SOCKET_BUFFER")
+  local iperf_args=(-c "$TARGET" -p "$SERVER_PORT" -t "$DURATION")
+  [[ -n "$SOCKET_BUFFER" ]] && iperf_args+=(-w "$SOCKET_BUFFER")
+  iperf_args+=(-P "$PARALLEL" --json)
   if [[ "$PROTOCOL" == "udp" ]]; then
     iperf_args+=(-u -b "$BANDWIDTH" -l "$PACKET_SIZE")
   fi

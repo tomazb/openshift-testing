@@ -128,6 +128,20 @@ if [[ "$args" == "-n network-validation get svc iperf3-server -o jsonpath={.spec
   exit 0
 fi
 
+# DB pod container list (tab-separated: pod-name TAB containers...) — simulates OCP 4.14+ where
+# nbdb/sbdb live in ovnkube-node; must be matched before the field-selector queries below.
+if [[ "$args" == *"get pods -l app=ovnkube-node"*'metadata.name}{"\t"}'* ]]; then
+  printf 'ovnkube-node-a\tovn-controller nbdb sbdb northd ovnkube-controller \n'
+  printf 'ovnkube-node-b\tovn-controller nbdb sbdb northd ovnkube-controller \n'
+  exit 0
+fi
+
+# Node exec container list for first pod (used to detect the right exec container).
+if [[ "$args" == *"get pods -l app=ovnkube-node"*"items[0].spec.containers"* ]]; then
+  printf 'ovn-controller\nnbdb\nsbdb\nnorthd\novnkube-controller\n'
+  exit 0
+fi
+
 if [[ "$args" == "-n openshift-ovn-kubernetes get pods -l app=ovnkube-control-plane -o jsonpath="* ]]; then
   echo "ovnkube-control-plane-a"
   exit 0
@@ -156,6 +170,11 @@ fi
 
 if [[ "$args" == "-n network-validation exec iperf3-server -- bash -c "*"ss -H -ltn"* ]]; then
   echo "ready"
+  exit 0
+fi
+
+if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 --version" ]]; then
+  echo "iperf 3.21 (cJSON 1.7.15)"
   exit 0
 fi
 
@@ -403,10 +422,11 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" ovn-diagnostics
 
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/ovnkube-control-plane-a-nbctl-show.txt"
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
-test -f "$ARTIFACT_DIR/05-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
-grep -Fq "ovnkube-control-plane-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/ovnkube-control-plane-logs.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/ovnkube-node-a-nbctl-show.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/node-a-ovnkube-node-a-geneve-stats.txt"
+test -f "$ARTIFACT_DIR/06-ovn-diagnostics/node-b-ovnkube-node-b-flow-count.txt"
+grep -Fq "ovnkube-node-a -c nbdb -- ovn-nbctl show" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-a" "$FAKE_OC_LOG"
 grep -Fq "ovnkube-node --field-selector spec.nodeName=node-b" "$FAKE_OC_LOG"
 
@@ -424,13 +444,13 @@ EOF
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$CONFIG_FILE" report
 
-test -f "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Socket buffer: system default" "$ARTIFACT_DIR/06-report/network-validation-report.md"
+test -f "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq -- "- Verdict: Accepted" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Throughput: 2.5 Gbps" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Protocol: tcp" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Server node: \`node-a\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Client node: \`node-b\`" "$ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Socket buffer: system default" "$ARTIFACT_DIR/07-report/network-validation-report.md"
 if grep -Fq -- "--window 256M" "$FAKE_OC_LOG"; then
   echo "default network validation should not force a large socket buffer" >&2
   exit 1
@@ -463,7 +483,7 @@ grep -Fq "mountPath: /opt/network-validation" "$SAME_ARTIFACT_DIR/tmp/iperf3-cli
 test -f "$SAME_ARTIFACT_DIR/02-same-node/client/iperf3_client.json"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
-grep -Fq "ready" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
+grep -Fxq "0" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt.rc"
 grep -Fq "ready-check" "$FAKE_OC_LOG"
 grep -Fq "ss -H -ltn" "$FAKE_OC_LOG"
 if grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"; then
@@ -496,8 +516,8 @@ grep -Fq "name: udp" "$SVC_ARTIFACT_DIR/tmp/iperf3-service.yaml"
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$SVC_CONFIG" report
 
-grep -Fq "## Pod-to-service network" "$SVC_ARTIFACT_DIR/06-report/network-validation-report.md"
-grep -Fq "Throughput: 9.5 Gbps" "$SVC_ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq "## Pod-to-service network" "$SVC_ARTIFACT_DIR/07-report/network-validation-report.md"
+grep -Fq "Throughput: 9.5 Gbps" "$SVC_ARTIFACT_DIR/07-report/network-validation-report.md"
 
 # --- Test 8: iperf client failures become reportable validation results ---
 FAIL_ARTIFACT_DIR="$TMP_DIR/fail-artifacts"
@@ -518,7 +538,7 @@ grep -Fq "client_rc=7" "$FAIL_ARTIFACT_DIR/01-cross-node/iperf3_summary.txt"
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
   bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$FAIL_CONFIG" report
 
-grep -Fq -- "- Verdict: Blocked" "$FAIL_ARTIFACT_DIR/06-report/network-validation-report.md"
+grep -Fq -- "- Verdict: Blocked" "$FAIL_ARTIFACT_DIR/07-report/network-validation-report.md"
 
 # --- Test 9: Host-network metrics can run in best-effort restricted mode ---
 BEST_EFFORT_ARTIFACT_DIR="$TMP_DIR/best-effort-artifacts"
@@ -541,3 +561,31 @@ if grep -Fq "runAsUser: 0" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"; t
   echo "restricted best-effort pod must not request root runAsUser" >&2
   exit 1
 fi
+
+# --- Test 10: IPERF_PARALLEL accepts "auto" and positive integers, rejects 0 ---
+PARALLEL_BAD_CONFIG="$TMP_DIR/bad-parallel.env"
+cat >"$PARALLEL_BAD_CONFIG" <<EOF
+ARTIFACT_DIR="$TMP_DIR/p-test"
+IPERF_PARALLEL="0"
+EOF
+
+set +e
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$PARALLEL_BAD_CONFIG" init \
+  >"$TMP_DIR/bad-parallel.out" 2>&1
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "IPERF_PARALLEL=0 should be rejected" >&2
+  exit 1
+fi
+grep -Fq "IPERF_PARALLEL must be auto or a positive integer" "$TMP_DIR/bad-parallel.out"
+
+PARALLEL_AUTO_CONFIG="$TMP_DIR/auto-parallel.env"
+cat >"$PARALLEL_AUTO_CONFIG" <<EOF
+ARTIFACT_DIR="$TMP_DIR/p-auto"
+IPERF_PARALLEL="auto"
+EOF
+env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/bin/ocp-network-validate" --config "$PARALLEL_AUTO_CONFIG" init
