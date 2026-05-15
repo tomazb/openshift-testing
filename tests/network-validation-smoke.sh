@@ -338,6 +338,31 @@ if [[ "$rc" -eq 0 ]]; then
 fi
 grep -Fq "ERROR: --role requires a value" "$TMP_DIR/collector-missing-value.out"
 
+# --- Test 1d: TCP server collector does not exit before starting iperf3 ---
+cat >"$FAKE_BIN/iperf3" <<'FAKEIPERF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--version" ]]; then
+  echo "iperf 3.19"
+  exit 0
+fi
+printf '%s\n' "$*" >"${FAKE_IPERF_LOG:-/dev/null}"
+printf '{"end":{}}\n'
+FAKEIPERF
+chmod +x "$FAKE_BIN/iperf3"
+
+TCP_COLLECTOR_DIR="$TMP_DIR/tcp-collector"
+FAKE_IPERF_LOG="$TMP_DIR/fake-iperf.log" PATH="$FAKE_BIN:$PATH" \
+  bash "$REPO_ROOT/network-validation/lib/iperf3-collector.sh" \
+    --role server \
+    --protocol tcp \
+    --interface eth0 \
+    --output "$TCP_COLLECTOR_DIR" \
+    --port 5201
+
+test -f "$TCP_COLLECTOR_DIR/iperf3_server.rc"
+grep -Fxq "0" "$TCP_COLLECTOR_DIR/iperf3_server.rc"
+grep -Fq -- "-s -p 5201 -1 --json" "$TMP_DIR/fake-iperf.log"
+
 # --- Test 2: --config without a path fails ---
 set +e
 env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \

@@ -110,7 +110,7 @@ detect_interface() {
 }
 
 auto_packet_size() {
-  [[ "$PROTOCOL" == "udp" && "$PACKET_SIZE" == "auto" ]] || return
+  [[ "$PROTOCOL" == "udp" && "$PACKET_SIZE" == "auto" ]] || return 0
   local mtu
   mtu="$(cat "/sys/class/net/$INTERFACE/mtu" 2>/dev/null || true)"
   if [[ "$mtu" =~ ^[0-9]+$ && "$mtu" -gt 28 ]]; then
