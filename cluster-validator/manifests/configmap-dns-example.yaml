@@ -12,8 +12,9 @@ data:
     # Temporary namespace used for node sweep and dnsperf workloads.
     # VALIDATION_NAMESPACE="dns-validation"
 
-    # Pull secret — required only for extract-tests / run-dns-tests.
-    # Mount a Secret containing pull-secret.json and set the path here.
+    # Pull secret for extract-tests / run-dns-tests.
+    # In cluster, this is optional when RBAC can read openshift-config/pull-secret.
+    # To override it, mount a Secret containing pull-secret.json and set the path here.
     # PULL_SECRET_FILE="/secrets/pull-secret.json"
 
     # DNS conformance test filter regex.
