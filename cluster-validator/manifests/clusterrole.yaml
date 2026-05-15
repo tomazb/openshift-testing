@@ -9,23 +9,7 @@ rules:
     verbs: [get, list]
   - apiGroups: [""]
     resources: [namespaces]
-    verbs: [get, list, create, delete]
-  # Core — pod lifecycle and diagnostics
-  - apiGroups: [""]
-    resources: [pods, pods/log, pods/exec]
-    verbs: [get, list, create, delete, watch, patch, update]
-  # Core — services, configmaps, endpoints
-  - apiGroups: [""]
-    resources: [services, configmaps, endpoints]
-    verbs: [get, list, create, delete, watch, patch, update]
-  # Core — events
-  - apiGroups: [""]
-    resources: [events]
     verbs: [get, list]
-  # apps — validator-managed workloads and diagnostics
-  - apiGroups: [apps]
-    resources: [daemonsets, deployments, replicasets]
-    verbs: [get, list, create, delete, watch, patch, update]
   # OpenShift cluster config
   - apiGroups: [config.openshift.io]
     resources: [clusterversions, clusteroperators, networks, ingresses]
@@ -33,12 +17,4 @@ rules:
   # OpenShift operator config (DNS and network operators)
   - apiGroups: [operator.openshift.io]
     resources: [dnses, networks]
-    verbs: [get, list]
-  # Routes (console route lookup in dns preflight)
-  - apiGroups: [route.openshift.io]
-    resources: [routes]
-    verbs: [get]
-  # EndpointSlices (dns preflight)
-  - apiGroups: [discovery.k8s.io]
-    resources: [endpointslices]
     verbs: [get, list]
