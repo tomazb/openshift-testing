@@ -124,7 +124,13 @@ spec:
       readOnly: true
     securityContext:
       privileged: ${privileged}
+EOF
+  if [[ "$privileged" == "true" ]]; then
+    cat <<EOF
       runAsUser: 0
+EOF
+  fi
+  cat <<EOF
   volumes:
   - name: network-validation-collector
     configMap:

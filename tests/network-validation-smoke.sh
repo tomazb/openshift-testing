@@ -500,3 +500,7 @@ env -u KUBECONFIG HOME="$TMP_DIR/home" PATH="$FAKE_BIN:$PATH" \
 grep -Fq "hostNetwork: true" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "hostPID: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-server.yaml"
 grep -Fq "privileged: false" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"
+if grep -Fq "runAsUser: 0" "$BEST_EFFORT_ARTIFACT_DIR/tmp/iperf3-client.yaml"; then
+  echo "restricted best-effort pod must not request root runAsUser" >&2
+  exit 1
+fi
