@@ -151,7 +151,7 @@ if [[ "$args" == "-n network-validation exec iperf3-server -- iperf3 -s -p 5201 
   exit 0
 fi
 
-if [[ "$args" == "-n network-validation exec iperf3-client -- bash -c "*"/dev/tcp/"* ]]; then
+if [[ "$args" == "-n network-validation exec iperf3-server -- bash -c "*"ss -H -ltn"* ]]; then
   echo "ready"
   exit 0
 fi
@@ -457,7 +457,11 @@ test -f "$SAME_ARTIFACT_DIR/02-same-node/server/iperf3_server.rc"
 test -f "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
 grep -Fq "ready" "$SAME_ARTIFACT_DIR/02-same-node/ready-check.txt"
 grep -Fq "ready-check" "$FAKE_OC_LOG"
-grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"
+grep -Fq "ss -H -ltn" "$FAKE_OC_LOG"
+if grep -Fq "/dev/tcp/" "$FAKE_OC_LOG"; then
+  echo "readiness check must not consume the single-shot iperf3 server connection" >&2
+  exit 1
+fi
 
 # --- Test 7: Pod-to-service uses a real artifact dir and valid Service ports ---
 SVC_ARTIFACT_DIR="$TMP_DIR/service-artifacts"

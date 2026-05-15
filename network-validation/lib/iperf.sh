@@ -79,11 +79,11 @@ run_iperf_test() {
 
 wait_for_iperf_server() {
   local target_ip="$1" d="$2"
-  # shellcheck disable=SC2016 # evaluated by bash inside the client pod.
-  local ready_script='for i in $(seq 1 "$1"); do if timeout 1 bash -c "</dev/tcp/$2/$3" 2>/dev/null; then exit 0; fi; sleep 1; done; exit 1'
+  # shellcheck disable=SC2016 # evaluated by bash inside the server pod.
+  local ready_script='for i in $(seq 1 "$1"); do if ss -H -ltn 2>/dev/null | awk "{print \$4}" | grep -Eq "(^|:)${2}$"; then exit 0; fi; sleep 1; done; exit 1'
   log "Waiting for iperf3 server readiness on $target_ip:$IPERF_PORT..."
-  run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-client -- \
-    bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$target_ip" "$IPERF_PORT"
+  run_out_checked "$d/ready-check.txt" oc -n "$IPERF_NAMESPACE" exec iperf3-server -- \
+    bash -c "$ready_script" ready-check "$IPERF_SERVER_READY_TIMEOUT" "$IPERF_PORT"
 }
 
 retrieve_collector_artifacts() {
